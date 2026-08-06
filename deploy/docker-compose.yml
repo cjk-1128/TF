@@ -1,0 +1,47 @@
+version: "3.9"
+
+services:
+  terraforge:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: terraforge:latest
+    container_name: terraforge
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: "sqlite:////data/terraforge.db"
+      LOCAL_VECTOR_DIR: "/data/vectorstore"
+      UPLOAD_DIR: "/data/uploads"
+      VECTOR_BACKEND: ${VECTOR_BACKEND:-local}
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-hash}
+      RERANK_PROVIDER: ${RERANK_PROVIDER:-rule}
+      MILVUS_HOST: ${MILVUS_HOST:-}
+      MILVUS_PORT: ${MILVUS_PORT:-19530}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+    volumes:
+      - terraforge_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: terraforge-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - terraforge
+
+volumes:
+  terraforge_data:
