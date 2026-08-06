@@ -95,6 +95,32 @@ class OpenAICompatibleEmbedding(BaseEmbedding):
     async def embed_texts(self, texts: List[str]) -> List[List[float]]:
         if not texts:
             return []
+        from app.core.cache import default_cache, embedding_cache_key
+        provider = self.__class__.__name__
+
+        # 1) 逐条走缓存（L1/L2），命中直接返回
+        out: List[Optional[List[float]]] = [None] * len(texts)
+        miss_idx: List[int] = []
+        for i, t in enumerate(texts):
+            cached = default_cache.get(embedding_cache_key(provider, self.model, t))
+            if cached is not None:
+                out[i] = cached
+            else:
+                miss_idx.append(i)
+        if not miss_idx:
+            return [o for o in out if o is not None]
+
+        # 2) 仅对未命中的文本调用 API（保持原有分批逻辑）
+        miss_texts = [texts[i] for i in miss_idx]
+        miss_vecs = await self._embed_batch(miss_texts)
+        for j, i in enumerate(miss_idx):
+            vec = miss_vecs[j]
+            default_cache.set(embedding_cache_key(provider, self.model, texts[i]), vec)
+            out[i] = vec
+        return [o for o in out if o is not None]
+
+    async def _embed_batch(self, texts: List[str]) -> List[List[float]]:
+        """实际的批量向量化（被 embed_texts 的缓存层调用）。"""
         out: List[List[float]] = []
         bs = settings.EMBEDDING_BATCH_SIZE
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}

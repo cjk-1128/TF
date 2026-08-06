@@ -1,0 +1,36 @@
+# ===== 版本控制 / CI =====
+.git
+.github
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# ===== 前端 =====
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# ===== 运行时数据 / 日志 / 密钥 =====
+data/
+logs/
+*.db
+*.db-shm
+*.db-wal
+*.log
+.env
+.env.*
+!.env.example
+
+# ===== 测试 & 文档（不进运行镜像） =====
+tests/
+docs/
+
+# ===== 系统 =====
+.DS_Store
+.idea
+.vscode

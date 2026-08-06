@@ -68,6 +68,14 @@ def session_scope() -> Generator[Session, None, None]:
 
 
 def init_db() -> None:
+    """初始化数据库：优先走 Alembic 迁移（版本化管理，支持改/删字段），
+    失败则回退到 create_all（仅新增表，向后兼容旧环境）。"""
     from app import models  # noqa: F401  触发模型注册
-    Base.metadata.create_all(bind=engine)
-    logger.info("数据库初始化完成 | %s", settings.DATABASE_URL.split("@")[-1])
+    try:
+        from app.db.migrate import run_migrations
+        run_migrations()
+        logger.info("数据库迁移完成 | %s", settings.DATABASE_URL.split("@")[-1])
+    except Exception as exc:  # pragma: no cover - 兜底，保证服务可启动
+        logger.warning("Alembic 迁移失败，回退 create_all: %s", exc)
+        Base.metadata.create_all(bind=engine)
+        logger.info("数据库初始化完成(create_all) | %s", settings.DATABASE_URL.split("@")[-1])
