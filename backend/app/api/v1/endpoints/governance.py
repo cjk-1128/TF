@@ -9,9 +9,10 @@ from sqlalchemy.orm import Session
 from app.core.logging import get_trace_id
 from app.db.session import get_db
 from app.schemas.common import ApiResponse, PageData
-from app.schemas.governance import (GovernanceTaskCreate, GovernanceTaskOut,
-                                    GovernanceTaskUpdate, KBHealthReport,
-                                    KnowledgeGap, OperationReport)
+from app.schemas.governance import (GovernanceDashboard, GovernanceTaskCreate,
+                                    GovernanceTaskOut, GovernanceTaskUpdate,
+                                    KBHealthReport, KnowledgeGap, KnowledgeGapAccept,
+                                    KnowledgeGapOut, OperationReport)
 from app.services.governance_service import GovernanceService
 
 router = APIRouter()
@@ -21,6 +22,41 @@ router = APIRouter()
             summary="知识库体检报告")
 def health_report(kb_id: Optional[str] = None, db: Session = Depends(get_db)):
     return ApiResponse.ok(GovernanceService(db).health_report(kb_id), trace_id=get_trace_id())
+
+
+# ==================== 知识缺口闭环 ====================
+@router.get("/gaps", response_model=ApiResponse[List[KnowledgeGapOut]],
+            summary="知识缺口清单（持久化待办，可按状态/意图过滤）")
+def list_gaps(status: str = "", intent: str = "",
+              limit: int = Query(50, ge=1, le=200),
+              offset: int = Query(0, ge=0), db: Session = Depends(get_db)):
+    items, total = GovernanceService(db).list_knowledge_gaps(status, intent, limit, offset)
+    return ApiResponse.ok([KnowledgeGapOut.model_validate(i) for i in items],
+                          trace_id=get_trace_id())
+
+
+@router.post("/gaps/{gap_id}/accept", response_model=ApiResponse[GovernanceTaskOut],
+             summary="采纳缺口：生成'补充资料'治理任务（闭环）")
+def accept_gap(gap_id: str, payload: KnowledgeGapAccept, db: Session = Depends(get_db)):
+    t = GovernanceService(db).accept_gap(
+        gap_id, assignee=payload.assignee, kb_id=payload.kb_id,
+        priority=payload.priority, due_days=payload.due_days)
+    return ApiResponse.ok(GovernanceTaskOut.model_validate(t),
+                          "已生成治理任务，缺口进入闭环", get_trace_id())
+
+
+@router.post("/gaps/{gap_id}/reject", response_model=ApiResponse[KnowledgeGapOut],
+             summary="驳回缺口：标记为暂不处理")
+def reject_gap(gap_id: str, db: Session = Depends(get_db)):
+    g = GovernanceService(db).reject_gap(gap_id)
+    return ApiResponse.ok(KnowledgeGapOut.model_validate(g), "已驳回", get_trace_id())
+
+
+@router.get("/dashboard", response_model=ApiResponse[GovernanceDashboard],
+            summary="治理总览看板（缺口/任务/覆盖/高频缺口）")
+def dashboard(days: int = Query(30, ge=1, le=365), db: Session = Depends(get_db)):
+    return ApiResponse.ok(GovernanceDashboard(**GovernanceService(db).governance_dashboard(days)),
+                          trace_id=get_trace_id())
 
 
 @router.post("/tasks", response_model=ApiResponse[GovernanceTaskOut], summary="创建治理事项")

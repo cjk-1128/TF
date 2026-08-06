@@ -18,10 +18,11 @@ from sqlalchemy.orm import Session
 from app.core.constants import DocumentStatus, GovernanceStatus, QueryIntent
 from app.core.exceptions import NotFoundError
 from app.core.logging import get_logger
-from app.models.governance import FeedbackRecord, GovernanceTask, QueryLog
+from app.models.governance import (FeedbackRecord, GovernanceTask, KnowledgeGap,
+                                    QueryLog)
 from app.models.knowledge import Chunk, Document, KnowledgeBase
 from app.schemas.governance import (GovernanceTaskCreate, HealthIssue,
-                                    KBHealthReport, KnowledgeGap,
+                                    KBHealthReport, KnowledgeGap as KnowledgeGapSchema,
                                     OperationReport)
 from app.utils.text import tokenize
 
@@ -247,7 +248,7 @@ class GovernanceService:
         gaps = []
         for key, items in buckets.items():
             avg = sum(i.confidence for i in items) / len(items)
-            gaps.append(KnowledgeGap(
+            gaps.append(KnowledgeGapSchema(
                 query=items[0].query, count=len(items), avg_confidence=round(avg, 3),
                 suggestion=("零召回，建议补充相关规范或案例文档"
                             if all(i.hit_count == 0 for i in items)
@@ -255,6 +256,182 @@ class GovernanceService:
             ))
         gaps.sort(key=lambda g: (g.count, -g.avg_confidence), reverse=True)
         return gaps[:limit]
+
+    # ==================== 知识缺口（持久化闭环） ====================
+    @staticmethod
+    def _gap_key(query: str) -> str:
+        """归一化键：把相似问题聚合到同一条缺口（取前 6 个关键词的并集排序）。"""
+        from app.utils.text import sha256_text, tokenize
+        toks = sorted(set(tokenize(query)))[:6]
+        if not toks:
+            return sha256_text(query.strip().lower())[:32]
+        return " ".join(toks)
+
+    def capture_gap(self, query: str, intent: str, domains: List[str],
+                    user_id: str, confidence: float) -> Optional[KnowledgeGap]:
+        """自动捕获一条知识缺口（治理 Agent 在每次答不好时调用）。
+
+        对相似问题按 query_key 去重聚合，累加 occurrence_count；已采纳/驳回的缺口
+        不再重复计数（避免覆盖人工决策）。返回落库/更新的缺口对象。
+        """
+        key = self._gap_key(query)
+        existing = (self.db.query(KnowledgeGap)
+                    .filter(KnowledgeGap.query_key == key).first())
+        if existing and existing.status in ("accepted", "rejected", "resolved"):
+            # 人工已决策，保留决策，仅若有新信息可忽略
+            return existing
+        if existing:
+            existing.occurrence_count = (existing.occurrence_count or 1) + 1
+            existing.last_asked_at = datetime.utcnow()
+            existing.query = query  # 用最新问法展示
+            existing.intent = intent or existing.intent
+            if domains:
+                existing.domains = domains
+            existing.updated_at = datetime.utcnow()
+            self.db.flush()
+            logger.info("知识缺口聚合 | key=%s | count=%d", key, existing.occurrence_count)
+            return existing
+
+        gap = KnowledgeGap(
+            query=query, query_key=key, intent=intent, domains=domains or [],
+            user_id=user_id or "anonymous",
+            occurrence_count=1, last_asked_at=datetime.utcnow(),
+            status="open", suggested_kb_id="", suggested_title="",
+            linked_task_id="",
+        )
+        self.db.add(gap)
+        self.db.flush()
+        logger.info("知识缺口捕获 | %s | intent=%s | conf=%.3f", query[:40], intent, confidence)
+        return gap
+
+    def list_knowledge_gaps(self, status: str = "", intent: str = "",
+                            limit: int = 50, offset: int = 0) -> Tuple[List[KnowledgeGap], int]:
+        q = self.db.query(KnowledgeGap)
+        if status:
+            q = q.filter(KnowledgeGap.status == status)
+        if intent:
+            q = q.filter(KnowledgeGap.intent == intent)
+        total = q.count()
+        items = (q.order_by(KnowledgeGap.occurrence_count.desc(),
+                            KnowledgeGap.last_asked_at.desc())
+                 .offset(offset).limit(limit).all())
+        return items, total
+
+    def accept_gap(self, gap_id: str, assignee: str = "", kb_id: str = "",
+                   priority: str = "", due_days: int = 14) -> GovernanceTask:
+        """把一条缺口采纳为"补充资料"治理任务，形成闭环。"""
+        gap = self.db.query(KnowledgeGap).filter(KnowledgeGap.id == gap_id).first()
+        if not gap:
+            raise NotFoundError(f"知识缺口不存在: {gap_id}")
+        if gap.status == "accepted" and gap.linked_task_id:
+            # 已采纳过，返回已关联任务
+            t = self.db.query(GovernanceTask).filter(
+                GovernanceTask.id == gap.linked_task_id).first()
+            if t:
+                return t
+
+        title = gap.suggested_title or f"补充知识：{gap.query[:30]}"
+        task = GovernanceTask(
+            task_type="gap_fill",
+            title=title,
+            description=(f"知识缺口自动生成：用户多次问到「{gap.query}」（{gap.occurrence_count} 次，"
+                         f"意图 {gap.intent}），当前知识库零召回/低置信，需补充相关资料。\n"
+                         f"建议补充到知识域：{', '.join(gap.domains) or '未指定'}。"),
+            target_doc_ids=[],
+            kb_id=kb_id or (gap.suggested_kb_id or ""),
+            priority=priority or ("high" if gap.occurrence_count >= 3 else "medium"),
+            assignee=assignee or "",
+            due_date=datetime.utcnow() + timedelta(days=due_days),
+        )
+        self.db.add(task)
+        self.db.flush()
+        gap.status = "accepted"
+        gap.linked_task_id = task.id
+        gap.suggested_kb_id = task.kb_id
+        gap.updated_at = datetime.utcnow()
+        self.db.flush()
+        logger.info("缺口采纳为治理任务 | gap=%s | task=%s", gap_id, task.id)
+        return task
+
+    def reject_gap(self, gap_id: str, reason: str = "") -> KnowledgeGap:
+        gap = self.db.query(KnowledgeGap).filter(KnowledgeGap.id == gap_id).first()
+        if not gap:
+            raise NotFoundError(f"知识缺口不存在: {gap_id}")
+        gap.status = "rejected"
+        if reason:
+            gap.suggested_title = (gap.suggested_title or "").strip() or ""
+            # 把驳回理由塞进 linked_task_id 不合适，这里仅改状态
+        gap.updated_at = datetime.utcnow()
+        self.db.flush()
+        logger.info("缺口驳回 | gap=%s", gap_id)
+        return gap
+
+    def resolve_gap(self, gap_id: str, task_id: str = "") -> KnowledgeGap:
+        gap = self.db.query(KnowledgeGap).filter(KnowledgeGap.id == gap_id).first()
+        if not gap:
+            raise NotFoundError(f"知识缺口不存在: {gap_id}")
+        gap.status = "resolved"
+        if task_id:
+            gap.linked_task_id = task_id
+        gap.updated_at = datetime.utcnow()
+        self.db.flush()
+        return gap
+
+    def governance_dashboard(self, days: int = 30) -> dict:
+        """治理总览：缺口分布、任务进度、知识覆盖、高频缺口。"""
+        since = datetime.utcnow() - timedelta(days=days)
+        gap_q = self.db.query(KnowledgeGap)
+        gaps = gap_q.all()
+        gap_by_status = defaultdict(int)
+        gap_by_intent: Counter = Counter()
+        for g in gaps:
+            gap_by_status[g.status] += 1
+            gap_by_intent[g.intent] += 1
+
+        open_gaps = gap_by_status.get("open", 0)
+        top_gaps = sorted(
+            [g for g in gaps if g.status == "open"],
+            key=lambda x: (x.occurrence_count or 0), reverse=True)[:10]
+        top_gaps_out = [{
+            "id": g.id, "query": g.query, "intent": g.intent,
+            "occurrence_count": g.occurrence_count or 0,
+            "domains": g.domains or [], "last_asked_at": g.last_asked_at,
+        } for g in top_gaps]
+
+        task_total = self.db.query(func.count(GovernanceTask.id)).scalar() or 0
+        task_by_status = dict(
+            (s, self.db.query(func.count(GovernanceTask.id))
+             .filter(GovernanceTask.status == s).scalar() or 0)
+            for s in ("open", "processing", "done", "closed"))
+        pending_tasks = task_by_status.get("open", 0) + task_by_status.get("processing", 0)
+
+        # 知识覆盖：近 N 天查询的应答率
+        logs = (self.db.query(QueryLog)
+                .filter(QueryLog.created_at >= since).all())
+        total_q = len(logs)
+        unanswered = sum(1 for l in logs if not l.answered or l.hit_count == 0)
+        answer_rate = round((total_q - unanswered) / total_q, 3) if total_q else 0.0
+
+        # 各知识域文档/切片量（覆盖率概览）
+        domain_docs = (self.db.query(KnowledgeBase.domain, func.count(Document.id))
+                       .join(Document, Document.kb_id == KnowledgeBase.id)
+                       .group_by(KnowledgeBase.domain).all())
+        coverage = {d: c for d, c in domain_docs}
+
+        return {
+            "period_days": days,
+            "gap_total": len(gaps),
+            "gap_by_status": dict(gap_by_status),
+            "gap_by_intent": dict(gap_by_intent),
+            "open_gaps": open_gaps,
+            "task_total": task_total,
+            "task_by_status": task_by_status,
+            "pending_tasks": pending_tasks,
+            "answer_rate": answer_rate,
+            "total_queries": total_q,
+            "domain_doc_count": coverage,
+            "top_gaps": top_gaps_out,
+        }
 
     # ==================== 运营报告 ====================
     def operation_report(self, days: int = 7) -> OperationReport:

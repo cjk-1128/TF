@@ -74,6 +74,47 @@ class KnowledgeGap(BaseModel):
     suggestion: str = ""
 
 
+class KnowledgeGapOut(BaseModel):
+    """持久化知识缺口（治理待办）。"""
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    query: str
+    query_key: str = ""
+    intent: str = ""
+    domains: List[str] = []
+    user_id: str = "anonymous"
+    occurrence_count: int = 1
+    last_asked_at: Optional[datetime] = None
+    status: str = "open"          # open/accepted/rejected/resolved
+    suggested_kb_id: str = ""
+    suggested_title: str = ""
+    linked_task_id: str = ""
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class KnowledgeGapAccept(BaseModel):
+    assignee: str = ""
+    kb_id: str = ""
+    priority: str = ""
+    due_days: int = 14
+
+
+class GovernanceDashboard(BaseModel):
+    period_days: int = 30
+    gap_total: int = 0
+    gap_by_status: dict = {}
+    gap_by_intent: dict = {}
+    open_gaps: int = 0
+    task_total: int = 0
+    task_by_status: dict = {}
+    pending_tasks: int = 0
+    answer_rate: float = 0.0
+    total_queries: int = 0
+    domain_doc_count: dict = {}
+    top_gaps: List[dict] = []
+
+
 class OperationReport(BaseModel):
     """知识库运营周报/月报"""
     period: str

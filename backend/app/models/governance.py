@@ -36,6 +36,34 @@ class GovernanceTask(Base):
     __table_args__ = (Index("idx_gov_status", "status"),)
 
 
+class KnowledgeGap(Base):
+    """知识缺口：自动捕获的"答不上来/答不准"问题沉淀为可持续治理的待办。
+
+    与 QueryLog 的区别：QueryLog 是每条查询的流水；KnowledgeGap 是把相似问题
+    聚合后的持久化待办，可被采纳(转治理任务)、驳回、标记已解决，形成闭环。
+    """
+    __tablename__ = "tf_knowledge_gap"
+
+    id = Column(String(32), primary_key=True, default=_uid)
+    query = Column(Text, nullable=False, comment="最近一次询问原文（展示用）")
+    query_key = Column(String(64), nullable=False, index=True,
+                       comment="归一化键：用于把相似问题聚合到同一条缺口")
+    intent = Column(String(32), default="", comment="QueryIntent 值")
+    domains = Column(JSON, default=list, comment="路由到的知识域")
+    user_id = Column(String(64), default="anonymous")
+    occurrence_count = Column(Integer, default=1, comment="被问到的次数（相似问题累加）")
+    last_asked_at = Column(DateTime, default=datetime.utcnow)
+    status = Column(String(16), default="open", index=True,
+                    comment="open/accepted/rejected/resolved")
+    suggested_kb_id = Column(String(32), default="", comment="建议补充到的知识库")
+    suggested_title = Column(String(256), default="", comment="建议资料标题（采纳时生成）")
+    linked_task_id = Column(String(32), default="", comment="关联治理任务 id")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (Index("idx_gap_status_intent", "status", "intent"),)
+
+
 class FeedbackRecord(Base):
     """用户反馈：驱动知识缺口发现"""
     __tablename__ = "tf_feedback"

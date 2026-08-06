@@ -6,6 +6,7 @@ from typing import List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
+from app.core.constants import QueryIntent
 from app.core.exceptions import NotFoundError
 from app.core.logging import get_logger
 from app.models.conversation import Citation, Conversation, Message
@@ -122,6 +123,20 @@ class ChatService:
 
         conv.message_count = (conv.message_count or 0) + 2
         conv.updated_at = datetime.utcnow()
+
+        # 4.5 治理 Agent 自动捕获知识缺口：答不上/答不准的问题沉淀为待办
+        if (state.intent != QueryIntent.CHITCHAT
+                and (not state.context_chunks
+                     or state.confidence < 0.45
+                     or state.below_relevance_floor)):
+            try:
+                from app.services.governance_service import GovernanceService
+                GovernanceService(self.db).capture_gap(
+                    query=req.query, intent=state.intent.value,
+                    domains=state.target_domains, user_id=req.user_id,
+                    confidence=state.confidence)
+            except Exception as e:  # noqa: BLE001
+                logger.warning("知识缺口自动捕获失败（不影响主流程）: %s", e)
 
         # 5. 查询日志（Stage7 治理数据源）
         self.db.add(QueryLog(
