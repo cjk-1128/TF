@@ -141,22 +141,38 @@ class OpenAICompatibleEmbedding(BaseEmbedding):
 
 
 class CrossEncoderAPIReranker(BaseReranker):
-    """对接 bge-reranker 类 HTTP 服务。"""
+    """对接 bge-reranker 类 HTTP 服务。
+
+    失败时不退化为"原序"（那会严重拉低质量），而是降级到本地规则重排器。
+    """
 
     async def rerank(self, query: str, docs: List[str], top_n: int) -> List[tuple[int, float]]:
         if not docs:
             return []
         url = settings.RERANK_BASE_URL.rstrip("/") + "/rerank"
-        headers = {"Authorization": f"Bearer {settings.RERANK_API_KEY}"}
+        headers = {"Authorization": f"Bearer {settings.RERANK_API_KEY}",
+                   "Content-Type": "application/json"}
+        payload = {"model": settings.RERANK_MODEL, "query": query,
+                   "documents": docs, "top_n": top_n}
         try:
-            async with httpx.AsyncClient(timeout=60) as cli:
-                r = await cli.post(url, headers=headers, json={
-                    "model": settings.RERANK_MODEL, "query": query,
-                    "documents": docs, "top_n": top_n,
-                })
+            async with httpx.AsyncClient(timeout=settings.RERANK_TIMEOUT) as cli:
+                r = await cli.post(url, headers=headers, json=payload)
                 r.raise_for_status()
-                results = r.json().get("results", [])
-            return [(it["index"], float(it["relevance_score"])) for it in results]
+                data = r.json()
+            # 兼容两种返回格式：{"results":[...]} 与 {"data":[...]}
+            results = data.get("results") or data.get("data") or []
+            out: List[tuple[int, float]] = []
+            for it in results:
+                idx = it.get("index")
+                if idx is None:
+                    continue
+                raw = float(it.get("relevance_score", it.get("score", 0.0)))
+                out.append((int(idx), min(1.0, max(0.0, raw))))  # 分数归一化到 [0,1]
+            if not out:
+                raise ValueError("rerank 返回为空")
+            out.sort(key=lambda x: x[1], reverse=True)
+            return out[:top_n]
         except Exception as e:  # noqa: BLE001
-            logger.warning("Rerank 服务失败，降级为原序: %s", e)
-            return [(i, 1.0 - i * 0.01) for i in range(min(top_n, len(docs)))]
+            logger.warning("CrossEncoder 服务失败，降级本地规则重排: %s", e)
+            from app.llm.local_impl import RuleReranker
+            return await RuleReranker().rerank(query, docs, top_n)

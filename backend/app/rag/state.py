@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from app.core.constants import ConfidenceLevel, KnowledgeDomain, QueryIntent
+from app.rag.intent_agent import RetrievalPlan
 from app.retrieval.hybrid import Candidate
 
 
@@ -54,6 +55,8 @@ class RAGState:
     intent_confidence: float = 0.0
     need_retrieval: bool = True
     target_domains: List[str] = field(default_factory=list)
+    retrieval_plan: Optional[RetrievalPlan] = None   # Intent Agent 给出的检索策略
+    out_of_scope: bool = False                        # 与工程/资料无关，不应强答
 
     # ---- Stage2 查询改写 ----
     rewritten_query: str = ""

@@ -81,11 +81,20 @@ class Settings(BaseSettings):
     EMBEDDING_BATCH_SIZE: int = 32
 
     # ---------------- Rerank ----------------
-    # cross_encoder_api | rule  （rule = 内置多信号规则重排，零依赖）
-    RERANK_PROVIDER: Literal["cross_encoder_api", "rule"] = "rule"
+    # cross_encoder_api  : 远程 bge-reranker 类 HTTP 服务（需 RERANK_BASE_URL）
+    # cross_encoder_local: 本地 CrossEncoder 风格重排器（向量交互+词面，零依赖，默认）
+    # rule               : 纯规则重排（兜底）
+    RERANK_PROVIDER: Literal["cross_encoder_api", "cross_encoder_local", "rule"] = "cross_encoder_local"
     RERANK_BASE_URL: str = ""
     RERANK_API_KEY: str = ""
     RERANK_MODEL: str = "bge-reranker-v2-m3"
+    RERANK_TIMEOUT: int = 30
+
+    # ---------------- Intent Agent（Sprint 2 查询意图路由）----------------
+    # 开启后用 LLM 做结构化意图分类（需 LLM_API_KEY），否则用规则兜底
+    INTENT_AGENT_ENABLED: bool = True
+    # 是否允许把"与工程无关"的问题标记为越域（越域的 unknown 问题不强行检索）
+    INTENT_OUT_OF_SCOPE: bool = True
 
     # ---------------- 文档处理 ----------------
     UPLOAD_DIR: str = str(PROJECT_ROOT / "data" / "uploads")

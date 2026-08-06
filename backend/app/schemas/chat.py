@@ -111,6 +111,10 @@ class ChatResponse(BaseModel):
     rewritten_query: str = ""
     intent: str = ""
     intent_label: str = ""
+    intent_confidence: float = 0.0
+    retrieval_strategy: str = ""     # Intent Agent 给出的检索策略: precision/recall/balanced/none
+    target_domains: List[str] = []  # 路由到的优先知识域
+    out_of_scope: bool = False       # 与工程/资料无关，不应强答
     answer: str = ""
     citations: List[CitationOut] = []
     confidence: float = 0.0

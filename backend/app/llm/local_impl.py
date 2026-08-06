@@ -88,6 +88,77 @@ class RuleReranker(BaseReranker):
         return scored[:top_n]
 
 
+class LexicalInteractionReranker(BaseReranker):
+    """本地 Cross-Encoder 风格重排器（零依赖，Sprint 2）。
+
+    真正的 CrossEncoder 用单一模型对 (query, doc) 做联合打分；本地无模型时，
+    这里用"向量交互 + 词面交互"联合估计相关性，逼近 CrossEncoder 的效果：
+      - 向量交互：query 与每个 doc 的余弦相似（表达联合语义匹配），
+        复用 Embedding 且命中 Sprint1 缓存，不会重复推理；
+      - 词面交互：词面覆盖率 + 短语连续命中 + 条文号 + 强制性标志，
+        与 RuleReranker 同源，作为补充信号。
+    因此该重排器比纯规则的 RuleReranker 更贴近"交叉编码"，且无需任何外部服务。
+    """
+
+    async def rerank(self, query: str, docs: List[str], top_n: int) -> List[tuple[int, float]]:
+        if not docs:
+            return []
+
+        # 1) 向量交互（联合语义匹配）
+        cos: List[float] = [0.0] * len(docs)
+        try:
+            from app.llm.factory import get_embedding
+            emb = get_embedding()
+            qv = await emb.embed_query(query)
+            dvecs = await emb.embed_texts(docs)
+            cos = [self._cos(qv, dv) for dv in dvecs]
+        except Exception as e:  # noqa: BLE001
+            logger.warning("本地 CrossEncoder 向量交互失败，退纯词面: %s", e)
+
+        # 2) 词面交互特征 + 融合
+        q_tokens = set(tokenize(query))
+        q_raw = query.lower()
+        scored: List[tuple[int, float]] = []
+        for i, d in enumerate(docs):
+            lex = self._lexical(query, d, q_tokens, q_raw)
+            # 向量为主信号（0.65），词面为辅（0.35）
+            score = 0.65 * max(0.0, cos[i]) + 0.35 * lex
+            scored.append((i, round(min(score, 1.0), 6)))
+        scored.sort(key=lambda x: x[1], reverse=True)
+        return scored[:top_n]
+
+    @staticmethod
+    def _cos(a: list, b: list) -> float:
+        if not a or not b:
+            return 0.0
+        dot = sum(x * y for x, y in zip(a, b))
+        na = sum(x * x for x in a) ** 0.5
+        nb = sum(x * x for x in b) ** 0.5
+        if na == 0 or nb == 0:
+            return 0.0
+        return dot / (na * nb)
+
+    @staticmethod
+    def _lexical(query: str, doc: str, q_tokens: set, q_raw: str) -> float:
+        d_tokens = set(tokenize(doc))
+        cover = (len(q_tokens & d_tokens) / len(q_tokens)) if q_tokens else 0.0
+        phrase = 0.0
+        for n in (4, 3, 2):
+            for j in range(len(q_raw) - n + 1):
+                if q_raw[j:j + n] in doc.lower():
+                    phrase = max(phrase, n / 6.0)
+                    break
+            if phrase:
+                break
+        clause_bonus = 0.0
+        for m in re.findall(r"\d+(?:\.\d+){1,3}", query):
+            if m in doc:
+                clause_bonus = 0.25
+                break
+        mandatory = 0.1 if ("必须" in doc or "严禁" in doc or "不得" in doc) else 0.0
+        return 0.55 * cover + 0.20 * phrase + clause_bonus + mandatory
+
+
 class MockLLM(BaseLLM):
     """
     抽取式"生成"：不编造内容，只从上下文中挑选与问题最相关的句子重组，

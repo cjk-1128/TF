@@ -68,88 +68,30 @@ async def stage0_context(state: RAGState, db: Session) -> RAGState:
 
 
 # ============================================================
-# Stage1 智能路由
+# Stage1 智能路由（Intent Agent）
 # ============================================================
-_INTENT_RULES: list[tuple[QueryIntent, tuple[str, ...], float]] = [
-    (QueryIntent.SPEC_LOOKUP,
-     ("规范", "标准", "条文", "要求", "限值", "允许偏差", "验收", "国标", "行标",
-      "gb", "jgj", "jtg", "cjj", "多少", "不得低于", "不应大于", "规定"), 0.0),
-    (QueryIntent.QUALITY_DIAGNOSIS,
-     ("质量问题", "缺陷", "裂缝", "渗漏", "空鼓", "蜂窝", "麻面", "露筋", "沉降",
-      "变形", "原因", "成因", "为什么会", "事故", "返工", "不合格", "处理办法",
-      "怎么处理", "整改", "通病"), 0.05),
-    (QueryIntent.SCHEME_GENERATION,
-     ("方案", "工艺", "流程", "施工步骤", "怎么施工", "如何施工", "编制", "技术措施",
-      "交底", "组织设计", "专项方案"), 0.05),
-    (QueryIntent.CASE_RETRIEVAL,
-     ("案例", "类似工程", "以前", "历史", "经验", "教训", "先例", "参考项目",
-      "别的项目", "踩坑"), 0.05),
-    (QueryIntent.CHITCHAT,
-     ("你好", "你是谁", "谢谢", "再见", "介绍一下你", "会做什么", "帮我干嘛"), 0.0),
-]
-
-
-def _rule_intent(query: str) -> tuple[QueryIntent, float]:
-    q = query.lower()
-    scores: dict[QueryIntent, float] = {}
-    for intent, kws, bonus in _INTENT_RULES:
-        hit = sum(1 for k in kws if k in q)
-        if hit:
-            scores[intent] = hit * 0.22 + bonus
-
-    if not scores:
-        return QueryIntent.UNKNOWN, 0.3
-    best = max(scores.items(), key=lambda kv: kv[1])
-
-    # 闲聊需要问题很短才成立，避免"你好，C30混凝土养护要求"被误判
-    if best[0] == QueryIntent.CHITCHAT and len(query.strip()) > 14:
-        scores.pop(QueryIntent.CHITCHAT, None)
-        if not scores:
-            return QueryIntent.UNKNOWN, 0.3
-        best = max(scores.items(), key=lambda kv: kv[1])
-
-    # 冲突消解：用户显式要"案例/经验/参考"时，优先案例检索，
-    # 避免"混凝土裂缝的案例可以参考"因同时命中质量关键词而被判为质量分析。
-    CASE_PRIORITY_TOKENS = ("参考", "类似", "可以", "有哪些", "举例", "借鉴",
-                            "经验", "教训", "之前", "以前", "历史", "先例")
-    if (QueryIntent.CASE_RETRIEVAL in scores
-            and any(tok in q for tok in CASE_PRIORITY_TOKENS)):
-        rival_max = max((s for i, s in scores.items()
-                         if i != QueryIntent.CASE_RETRIEVAL), default=0.0)
-        if scores[QueryIntent.CASE_RETRIEVAL] <= rival_max:
-            scores[QueryIntent.CASE_RETRIEVAL] = rival_max + 0.1
-        best = max(scores.items(), key=lambda kv: kv[1])
-
-    return best[0], min(0.95, 0.45 + best[1])
-
-
 async def stage1_route(state: RAGState) -> RAGState:
     t0 = time.perf_counter()
-    intent, conf = _rule_intent(state.query)
+    from app.rag.intent_agent import IntentAgent
 
-    # 规则置信度低时用 LLM 兜底
-    if conf < 0.55 and settings.LLM_PROVIDER == "openai_compatible":
-        try:
-            res = await get_llm().chat(
-                [ChatMessage("user", prompts.INTENT_PROMPT.format(query=state.query))],
-                temperature=0.0, max_tokens=16)
-            label = res.content.strip().lower().split()[0].strip(".,;:")
-            intent = QueryIntent(label) if label in QueryIntent._value2member_map_ else intent
-            conf = 0.8
-        except Exception as e:  # noqa: BLE001
-            logger.warning("LLM 意图识别失败，沿用规则结果: %s", e)
+    agent = IntentAgent()
+    decision = await agent.classify(state.query, explicit_domains=state.domains or None)
+    plan = agent.build_plan(decision, top_k=state.top_k)
 
-    state.intent, state.intent_confidence = intent, round(conf, 3)
-    state.need_retrieval = intent != QueryIntent.CHITCHAT
+    state.intent = decision.intent
+    state.intent_confidence = decision.confidence
+    state.need_retrieval = decision.need_retrieval
+    state.target_domains = decision.target_domains
+    state.out_of_scope = decision.out_of_scope
+    state.retrieval_plan = plan
 
-    if state.domains:
-        state.target_domains = list(state.domains)
-    else:
-        state.target_domains = [d.value for d in INTENT_DOMAIN_ROUTING.get(intent, [])]
-
-    state.trace("stage1", "智能路由", t0, intent=intent.value,
-                intent_label=intent.label, confidence=state.intent_confidence,
-                need_retrieval=state.need_retrieval, domains=state.target_domains)
+    state.trace("stage1", "Intent Agent 路由", t0,
+                intent=decision.intent.value, intent_label=decision.intent.label,
+                confidence=decision.confidence,
+                need_retrieval=decision.need_retrieval,
+                out_of_scope=decision.out_of_scope,
+                strategy=plan.strategy, top_k=plan.top_k,
+                domains=decision.target_domains)
     return state
 
 
@@ -237,13 +179,39 @@ async def stage3_retrieve(state: RAGState) -> RAGState:
         state.trace("stage3", "混合检索", t0, skipped=True)
         return state
 
+    plan = state.retrieval_plan
+    top_k = plan.top_k if plan else (state.top_k or settings.RETRIEVAL_TOP_K)
+    threshold = plan.score_threshold if plan else settings.SCORE_THRESHOLD
+    vw = plan.vector_weight if plan else settings.HYBRID_VECTOR_WEIGHT
+    bw = plan.bm25_weight if plan else settings.HYBRID_BM25_WEIGHT
+    domain_priority = plan.domain_priority if plan else state.target_domains
+
+    # ---- 检索缓存（Sprint1 多级缓存接入检索管线）----
+    # 键包含查询+范围+检索策略，确保不同意图/参数不串缓存
+    from app.core.cache import default_cache, query_cache_key
+    cache_key = query_cache_key(
+        state.effective_query,
+        kb=tuple(state.kb_ids or []), dom=tuple(state.domains or []),
+        **(plan.as_ctx() if plan else {"tk": top_k, "th": threshold,
+                                       "vw": vw, "bw": bw,
+                                       "dp": tuple(domain_priority or [])}),
+    )
+    cached = default_cache.get(cache_key)
+    if cached is not None:
+        import copy
+        cands = [Candidate(**copy.deepcopy(d)) for d in cached]
+        state.candidates = cands
+        state.trace("stage3", "混合检索(缓存命中)", t0, recalled=len(cands),
+                    strategy=plan.strategy if plan else "default")
+        return state
+
     retriever = get_retriever()
-    top_k = state.top_k or settings.RETRIEVAL_TOP_K
     cands = await retriever.retrieve(
         state.effective_query, top_k=top_k,
         kb_ids=state.kb_ids or None,
         domains=state.domains or None,
-        domain_priority=state.target_domains,
+        domain_priority=domain_priority,
+        vector_weight=vw, bm25_weight=bw, score_threshold=threshold,
     )
 
     # 子查询补充召回（多跳问题）
@@ -253,7 +221,7 @@ async def stage3_retrieve(state: RAGState) -> RAGState:
             extra = await retriever.retrieve(sq, top_k=max(4, top_k // 3),
                                              kb_ids=state.kb_ids or None,
                                              domains=state.domains or None,
-                                             domain_priority=state.target_domains)
+                                             domain_priority=domain_priority)
             for c in extra:
                 if c.chunk_id not in seen:
                     c.fusion_score *= 0.9  # 子查询召回降权
@@ -269,9 +237,18 @@ async def stage3_retrieve(state: RAGState) -> RAGState:
                 c.fusion_score = round(c.fusion_score * 1.35, 6)
         cands.sort(key=lambda x: x.fusion_score, reverse=True)
 
+    # 写回缓存（L1 内存 + L2 Redis，命中 Sprint1 缓存层）；深拷贝避免后续 stage 改写 meta 污染缓存
+    try:
+        import copy
+        default_cache.set(cache_key, [copy.deepcopy(c.__dict__) for c in cands],
+                          ttl=settings.CACHE_TTL_SECONDS)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("检索缓存写入失败（不影响主流程）: %s", e)
+
     state.candidates = cands
     state.trace("stage3", "混合检索", t0, recalled=len(cands),
-                top_score=round(cands[0].fusion_score, 4) if cands else 0.0)
+                top_score=round(cands[0].fusion_score, 4) if cands else 0.0,
+                strategy=plan.strategy if plan else "default")
     return state
 
 

@@ -34,7 +34,7 @@ async def chat_stream(req: ChatRequest, db: Session = Depends(get_db)):
     """
     async def gen():
         res = await ChatService(db).chat(req)
-        yield f"event: meta\ndata: {json.dumps({'conversation_id': res.conversation_id, 'message_id': res.message_id, 'intent': res.intent, 'intent_label': res.intent_label}, ensure_ascii=False)}\n\n"
+        yield f"event: meta\ndata: {json.dumps({'conversation_id': res.conversation_id, 'message_id': res.message_id, 'intent': res.intent, 'intent_label': res.intent_label, 'retrieval_strategy': res.retrieval_strategy, 'out_of_scope': res.out_of_scope}, ensure_ascii=False)}\n\n"
         buf = res.answer
         for i in range(0, len(buf), 20):
             yield f"event: delta\ndata: {json.dumps({'text': buf[i:i + 20]}, ensure_ascii=False)}\n\n"

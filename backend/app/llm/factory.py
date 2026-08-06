@@ -38,6 +38,10 @@ def get_reranker() -> BaseReranker:
         from app.llm.openai_client import CrossEncoderAPIReranker
         logger.info("Rerank 使用远程 CrossEncoder | model=%s", settings.RERANK_MODEL)
         return CrossEncoderAPIReranker()
+    if settings.RERANK_PROVIDER == "cross_encoder_local":
+        from app.llm.local_impl import LexicalInteractionReranker
+        logger.info("Rerank 使用本地 CrossEncoder 风格重排器（零依赖）")
+        return LexicalInteractionReranker()
     from app.llm.local_impl import RuleReranker
     logger.info("Rerank 使用内置规则重排器")
     return RuleReranker()

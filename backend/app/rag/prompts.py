@@ -121,6 +121,31 @@ chitchat - 与工程无关的闲聊或系统功能询问
 标签："""
 
 
+# ---------------- Intent Agent 结构化分类 ----------------
+INTENT_AGENT_PROMPT = """你是 TerraForge 土木工程知识库的查询路由引擎。请判断用户问题的工程意图，并输出 JSON。
+
+可选意图（intent 字段，只能取其一）：
+- spec_lookup：查询规范条文、标准要求、限值、验收指标、强制性规定
+- quality_diagnosis：分析质量问题、缺陷成因、事故处理、整改返工
+- scheme_generation：编制施工方案、工艺流程、技术措施、专项方案
+- case_retrieval：查找类似工程案例、历史经验、教训、先例
+- chitchat：与工程无关的闲聊或单纯询问你能做什么
+- unknown：通用工程问题，无法归入以上四类
+
+判断规则：
+- 若问题明显与土木工程/施工/设计/监理/工程资料无关（如写诗、聊天气、编程题），
+  设 out_of_scope=true，intent=unknown。
+- confidence 为 0~1 的浮点数，证据越充分越高。
+- 只输出一个 JSON 对象，不要任何解释或 Markdown 代码块。
+
+输出格式示例：
+{"intent": "spec_lookup", "confidence": 0.92, "out_of_scope": false}
+
+用户问题：{query}
+
+输出："""
+
+
 def build_system_prompt(intent: QueryIntent) -> str:
     return SYSTEM_BASE + "\n\n" + INTENT_INSTRUCTIONS.get(
         intent, INTENT_INSTRUCTIONS[QueryIntent.UNKNOWN])

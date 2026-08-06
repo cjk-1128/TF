@@ -49,8 +49,15 @@ class HybridRetriever:
     async def retrieve(self, query: str, *, top_k: int | None = None,
                        kb_ids: Optional[List[str]] = None,
                        domains: Optional[List[str]] = None,
-                       domain_priority: Optional[List[str]] = None) -> List[Candidate]:
+                       domain_priority: Optional[List[str]] = None,
+                       vector_weight: float | None = None,
+                       bm25_weight: float | None = None,
+                       score_threshold: float | None = None) -> List[Candidate]:
         top_k = top_k or settings.RETRIEVAL_TOP_K
+        # 允许 Intent Agent 按意图覆盖融合权重与阈值（自适应检索）
+        wv = vector_weight if vector_weight is not None else settings.HYBRID_VECTOR_WEIGHT
+        wb = bm25_weight if bm25_weight is not None else settings.HYBRID_BM25_WEIGHT
+        threshold = score_threshold if score_threshold is not None else settings.SCORE_THRESHOLD
 
         vec_task = asyncio.create_task(self._vector_search(query, top_k, kb_ids, domains))
         bm_task = asyncio.to_thread(self.bm25.search, query, top_k, kb_ids, domains)
@@ -70,7 +77,6 @@ class HybridRetriever:
 
         # ---- RRF + 加权融合 ----
         k = settings.RRF_K
-        wv, wb = settings.HYBRID_VECTOR_WEIGHT, settings.HYBRID_BM25_WEIGHT
         prio = {d: 1.0 + 0.06 * (len(domain_priority) - i)
                 for i, d in enumerate(domain_priority or [])}
 
@@ -86,8 +92,9 @@ class HybridRetriever:
             c.fusion_score = round(score, 6)
 
         result = sorted(pool.values(), key=lambda x: x.fusion_score, reverse=True)
-        result = [c for c in result if c.fusion_score >= settings.SCORE_THRESHOLD]
-        logger.info("混合检索 | 向量%d 关键词%d 融合后%d", len(vec_hits), len(bm_hits), len(result))
+        result = [c for c in result if c.fusion_score >= threshold]
+        logger.info("混合检索 | 向量%d 关键词%d 融合后%d | 策略 wv=%.2f wb=%.2f th=%.2f",
+                    len(vec_hits), len(bm_hits), len(result), wv, wb, threshold)
         return result[:top_k]
 
     async def _vector_search(self, query: str, top_k: int,
