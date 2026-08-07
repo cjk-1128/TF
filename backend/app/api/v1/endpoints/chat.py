@@ -16,7 +16,9 @@ from app.schemas.chat import (ChatRequest, ChatResponse, ConversationCreate,
                               ConversationOut, FeedbackRequest, MessageOut,
                               RetrievedChunk, SearchRequest)
 from app.schemas.common import ApiResponse, PageData
+from app.schemas.retrieval import MissDiagnoseRequest, MissDiagnoseResult
 from app.services.chat_service import ChatService
+from app.services.miss_attribution import MissAttributor
 from app.services.search_service import SearchService
 
 router = APIRouter()
@@ -82,6 +84,23 @@ async def explain(req: SearchRequest, request: Request,
     req.kb_ids = ChatService(db)._resolve_kb_ids(req.kb_ids, tenant_id, user)
     data = await SearchService(db).explain(req)
     return ApiResponse.ok(data, "检索可解释性明细", get_trace_id())
+
+
+@router.post("/diagnose", response_model=ApiResponse[MissDiagnoseResult],
+             summary="未命中原因归因（检索失败/低置信根因分析）")
+async def diagnose(req: MissDiagnoseRequest, request: Request,
+                   db: Session = Depends(get_db),
+                   user: User = Depends(get_current_user)):
+    """对一条查询做根因归因：缺文档 / 意图误路由 / 改写漂移 / 切分过碎，
+    并可把确属知识缺口的归因喂给治理 Agent（capture_gap）。"""
+    tenant_id = get_tenant_id(request)
+    kb_ids = (ChatService(db)._resolve_kb_ids([req.kb_id], tenant_id, user)
+              if req.kb_id else None)
+    result = await MissAttributor(db).diagnose(
+        query=req.query, tenant_id=tenant_id, kb_ids=kb_ids,
+        top_k=req.top_k, capture_gap=req.capture_gap,
+        user_id=user.id if user else "anonymous")
+    return ApiResponse.ok(result, "未命中归因完成", get_trace_id())
 
 
 # ==================== 会话 ====================

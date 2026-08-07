@@ -71,7 +71,9 @@ export const ragApi = {
   feedback: (data: { message_id: string; rating: number; reason?: string; comment?: string }) =>
     http.post('/rag/feedback', data) as unknown as Promise<ApiResponse<any>>,
   explain: (data: Record<string, any>) =>
-    http.post('/rag/explain', data) as unknown as Promise<ApiResponse<any>>
+    http.post('/rag/explain', data) as unknown as Promise<ApiResponse<any>>,
+  diagnose: (data: Record<string, any>) =>
+    http.post('/rag/diagnose', data) as unknown as Promise<ApiResponse<any>>
 }
 
 // ---------------- 治理 ----------------

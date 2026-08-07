@@ -13,6 +13,27 @@ const explain = ref<any>(null)
 const explainLoading = ref(false)
 const explainVisible = ref(false)
 
+const diagnose = ref<any>(null)
+const diagnoseLoading = ref(false)
+const diagnoseVisible = ref(false)
+const captureGap = ref(false)
+
+const verdictMeta: Record<string, { label: string; type: string }> = {
+  missing_doc: { label: '疑似缺文档（知识缺口）', type: 'danger' },
+  intent_misroute: { label: '意图误路由', type: 'warning' },
+  chunking_bad: { label: '文档切分过碎', type: 'warning' },
+  rewrite_drift: { label: '查询改写漂移', type: 'warning' },
+  retrieval_ok: { label: '检索正常', type: 'success' },
+  mixed: { label: '多因素混合', type: 'info' }
+}
+const reasonMeta: Record<string, { label: string; type: string }> = {
+  missing_doc: { label: '缺文档', type: 'danger' },
+  intent_misroute: { label: '意图误路由', type: 'warning' },
+  chunking_bad: { label: '切分过碎', type: 'warning' },
+  rewrite_drift: { label: '改写漂移', type: 'warning' },
+  no_retrieval: { label: '无需检索', type: 'info' }
+}
+
 const form = ref({
   query: '',
   kb_ids: [] as string[],
@@ -58,6 +79,23 @@ function useSample(s: string) {
   doSearch()
 }
 
+async function doDiagnose() {
+  if (!form.value.query.trim()) return
+  diagnoseLoading.value = true
+  diagnoseVisible.value = true
+  try {
+    const res = await ragApi.diagnose({
+      query: form.value.query,
+      kb_ids: form.value.kb_ids,
+      top_k: form.value.top_k,
+      capture_gap: captureGap.value
+    })
+    diagnose.value = res.data || null
+  } finally {
+    diagnoseLoading.value = false
+  }
+}
+
 onMounted(async () => {
   const res = await kbApi.list()
   kbs.value = res.data || []
@@ -81,6 +119,7 @@ onMounted(async () => {
             <template #append>
               <el-button :loading="loading" type="primary" @click="doSearch">检索</el-button>
               <el-button :loading="explainLoading" @click="doExplain">可解释性</el-button>
+              <el-button :loading="diagnoseLoading" @click="doDiagnose">未命中诊断</el-button>
             </template>
           </el-input>
         </el-form-item>
@@ -222,5 +261,70 @@ onMounted(async () => {
         </el-table>
       </template>
     </div>
+
+    <!-- 未命中原因归因 -->
+    <el-dialog v-model="diagnoseVisible" title="未命中原因归因（检索失败 / 低置信根因）"
+               width="840px" append-to-body>
+      <div v-loading="diagnoseLoading">
+        <el-empty v-if="!diagnoseLoading && !diagnose" description="暂无可归因数据" />
+        <template v-if="diagnose">
+          <el-alert
+            v-if="diagnose.verdict === 'retrieval_ok'"
+            type="success" :closable="false" show-icon
+            title="检索正常：当前知识库对该查询覆盖充分，无需归因"
+            style="margin-bottom: 12px"
+          />
+          <el-alert
+            v-else-if="diagnose.gap_captured"
+            type="warning" :closable="false" show-icon
+            :title="`已将该知识缺口记录到治理（gap_id: ${diagnose.gap_id?.slice(0, 8)}）`"
+            style="margin-bottom: 12px"
+          />
+          <el-descriptions :column="3" border size="small" style="margin-bottom: 12px">
+            <el-descriptions-item label="归因结论">
+              <el-tag :type="(verdictMeta[diagnose.verdict] || { type: 'info' }).type" size="small">
+                {{ (verdictMeta[diagnose.verdict] || { label: diagnose.verdict }).label }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="识别意图">{{ diagnose.intent }}</el-descriptions-item>
+            <el-descriptions-item label="意图置信度">{{ diagnose.intent_confidence }}</el-descriptions-item>
+            <el-descriptions-item label="意图域检索命中">{{ diagnose.retrieved_count }} 条</el-descriptions-item>
+            <el-descriptions-item label="全库检索命中">{{ diagnose.broad_retrieved_count }} 条</el-descriptions-item>
+            <el-descriptions-item label="越域">
+              <el-tag :type="diagnose.out_of_scope ? 'danger' : 'info'" size="small">
+                {{ diagnose.out_of_scope ? '是' : '否' }}
+              </el-tag>
+            </el-descriptions-item>
+          </el-descriptions>
+
+          <div class="tf-section-subtitle" style="margin: 6px 0 8px">
+            根因排序（按置信度）
+          </div>
+          <el-table :data="diagnose.reasons" size="small" border stripe
+                    :default-sort="{ prop: 'confidence', order: 'descending' }">
+            <el-table-column label="根因" width="132">
+              <template #default="{ row }">
+                <el-tag :type="(reasonMeta[row.code] || { type: 'info' }).type" size="small">
+                  {{ (reasonMeta[row.code] || { label: row.code }).label }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="label" label="说明" min-width="170" show-overflow-tooltip />
+            <el-table-column prop="confidence" label="置信度" width="92" sortable>
+              <template #default="{ row }">{{ (row.confidence * 100).toFixed(0) }}%</template>
+            </el-table-column>
+            <el-table-column prop="evidence" label="证据（管线信号）" min-width="220" show-overflow-tooltip />
+            <el-table-column prop="suggestion" label="修复建议" min-width="200" show-overflow-tooltip />
+          </el-table>
+        </template>
+      </div>
+      <template #footer>
+        <el-checkbox v-model="captureGap" style="float: left; margin-top: 4px">
+          记录为知识缺口（喂给治理 Agent）
+        </el-checkbox>
+        <el-button @click="diagnoseVisible = false">关闭</el-button>
+        <el-button type="primary" :loading="diagnoseLoading" @click="doDiagnose">重新诊断</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>

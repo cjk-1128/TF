@@ -40,7 +40,8 @@ export const ragApi = {
     messages: (id) => http.get(`/rag/conversations/${id}/messages`),
     removeConversation: (id) => http.delete(`/rag/conversations/${id}`),
     feedback: (data) => http.post('/rag/feedback', data),
-    explain: (data) => http.post('/rag/explain', data)
+    explain: (data) => http.post('/rag/explain', data),
+    diagnose: (data) => http.post('/rag/diagnose', data)
 };
 // ---------------- 治理 ----------------
 export const govApi = {
