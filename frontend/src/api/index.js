@@ -70,6 +70,12 @@ export const qualityApi = {
     inspect: (apiKey, data) => http.post('/quality/inspect', data, { headers: { 'X-API-Key': apiKey } }),
     reports: (apiKey, params) => http.get('/quality/reports', { params, headers: { 'X-API-Key': apiKey } }),
     report: (apiKey, id) => http.get(`/quality/reports/${id}`, { headers: { 'X-API-Key': apiKey } }),
-    convert: (apiKey, data) => http.post('/quality/issues/convert', data, { headers: { 'X-API-Key': apiKey } })
+    convert: (apiKey, data) => http.post('/quality/issues/convert', data, { headers: { 'X-API-Key': apiKey } }),
+    triggerSchedule: (apiKey, data) => http.post('/quality/schedule/trigger', data || {}, { headers: { 'X-API-Key': apiKey } }),
+    alerts: (apiKey, params) => http.get('/quality/alerts', { params, headers: { 'X-API-Key': apiKey } }),
+    alertDetail: (apiKey, id) => http.get(`/quality/alerts/${id}`, { headers: { 'X-API-Key': apiKey } }),
+    resolveAlert: (apiKey, id, note) => http.post(`/quality/alerts/${id}/resolve`, { note: note || '' }, { headers: { 'X-API-Key': apiKey } }),
+    deleteAlert: (apiKey, id) => http.delete(`/quality/alerts/${id}`, { headers: { 'X-API-Key': apiKey } }),
+    scoreTrend: (apiKey, params) => http.get('/quality/score-trend', { params, headers: { 'X-API-Key': apiKey } })
 };
 export default http;

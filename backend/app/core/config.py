@@ -106,6 +106,16 @@ class Settings(BaseSettings):
     API_KEY_HEADER: str = "X-API-Key"
     TENANT_HEADER: str = "X-Tenant-Id"
 
+    # ---------------- 质量巡检定时 + 阈值告警（Sprint7-T2）----------------
+    # 是否启用后台定时巡检（周期自动运行 + 阈值告警）。
+    QUALITY_INSPECT_ENABLED: bool = True
+    # 巡检周期（秒）；默认 1 小时。演示可设小值（如 120）观察调度。
+    QUALITY_INSPECT_INTERVAL_SECONDS: int = 3600
+    # 质量分低于该阈值触发 low_score 告警。
+    QUALITY_ALERT_SCORE_THRESHOLD: float = 80.0
+    # 相对上次巡检新增高危问题数 ≥ 该值触发 new_high_severity 告警。
+    QUALITY_ALERT_NEW_HIGH_THRESHOLD: int = 1
+
     # ---------------- 文档处理 ----------------
     UPLOAD_DIR: str = str(PROJECT_ROOT / "data" / "uploads")
     MAX_UPLOAD_MB: int = 100

@@ -40,7 +40,11 @@ async def lifespan(app: FastAPI):
     logger.info("索引就绪 | 向量 %d 条 | BM25 %d 条", vs.count(), bm.count())
     logger.info("接口文档: http://%s:%d/docs", settings.HOST, settings.PORT)
     logger.info("=" * 60)
+    # Sprint7-T2：启动质量巡检后台定时调度（周期巡检 + 阈值告警）
+    from app.core.scheduler import start_quality_scheduler, stop_quality_scheduler
+    start_quality_scheduler()
     yield
+    stop_quality_scheduler()
     logger.info("%s 已停止", settings.APP_NAME)
 
 

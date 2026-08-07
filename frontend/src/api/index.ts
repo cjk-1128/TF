@@ -123,7 +123,19 @@ export const qualityApi = {
   report: (apiKey: string, id: string) =>
     http.get(`/quality/reports/${id}`, { headers: { 'X-API-Key': apiKey } }) as unknown as Promise<ApiResponse<any>>,
   convert: (apiKey: string, data: Record<string, any>) =>
-    http.post('/quality/issues/convert', data, { headers: { 'X-API-Key': apiKey } }) as unknown as Promise<ApiResponse<any>>
+    http.post('/quality/issues/convert', data, { headers: { 'X-API-Key': apiKey } }) as unknown as Promise<ApiResponse<any>>,
+  triggerSchedule: (apiKey: string, data?: Record<string, any>) =>
+    http.post('/quality/schedule/trigger', data || {}, { headers: { 'X-API-Key': apiKey } }) as unknown as Promise<ApiResponse<any>>,
+  alerts: (apiKey: string, params?: Record<string, any>) =>
+    http.get('/quality/alerts', { params, headers: { 'X-API-Key': apiKey } }) as unknown as Promise<ApiResponse<any>>,
+  alertDetail: (apiKey: string, id: string) =>
+    http.get(`/quality/alerts/${id}`, { headers: { 'X-API-Key': apiKey } }) as unknown as Promise<ApiResponse<any>>,
+  resolveAlert: (apiKey: string, id: string, note?: string) =>
+    http.post(`/quality/alerts/${id}/resolve`, { note: note || '' }, { headers: { 'X-API-Key': apiKey } }) as unknown as Promise<ApiResponse<any>>,
+  deleteAlert: (apiKey: string, id: string) =>
+    http.delete(`/quality/alerts/${id}`, { headers: { 'X-API-Key': apiKey } }) as unknown as Promise<ApiResponse<any>>,
+  scoreTrend: (apiKey: string, params?: Record<string, any>) =>
+    http.get('/quality/score-trend', { params, headers: { 'X-API-Key': apiKey } }) as unknown as Promise<ApiResponse<any>>
 }
 
 export default http

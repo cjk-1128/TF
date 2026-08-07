@@ -76,3 +76,68 @@ class QualityIssueConvert(BaseModel):
     assignee: str = ""
     priority: str = "medium"
     due_days: int = 14
+
+
+# ---------------- Sprint7-T2 定时巡检 + 阈值告警 ----------------
+class QualityScheduleRequest(BaseModel):
+    """手动「立即巡检并告警」请求，可覆盖默认阈值。"""
+    kb_id: Optional[str] = None
+    score_threshold: float = Field(80.0, ge=0.0, le=100.0,
+                                   description="质量分低于该值触发低分告警")
+    new_high_threshold: int = Field(1, ge=0,
+                                    description="相对上次新增高危问题数≥该值触发告警")
+    dup_threshold: float = Field(0.92, ge=0.5, le=0.999)
+    orphan_threshold: float = Field(0.12, ge=0.0, le=0.9)
+    max_chunk_chars: int = Field(1200, ge=200, le=8000)
+    min_chunk_chars: int = Field(40, ge=1, le=500)
+    run_recall_probe: bool = Field(True, description="是否跑黄金集低召回意图探针")
+
+
+class QualityAlertOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str = ""
+    tenant_id: str = "default"
+    kb_id: str = ""
+    scope: str = "all"
+    alert_type: str = "low_score"
+    severity: str = "high"
+    score: float = 100.0
+    threshold: float = 80.0
+    new_high_issue_count: int = 0
+    prev_high_issue_count: int = 0
+    high_issue_count: int = 0
+    issue_count: int = 0
+    title: str = ""
+    detail: str = ""
+    report_id: str = ""
+    resolved: bool = False
+    resolved_at: Optional[datetime] = None
+    resolve_note: str = ""
+    created_at: Optional[datetime] = None
+
+
+class AlertResolveRequest(BaseModel):
+    note: str = ""
+
+
+class ScheduleRunResult(BaseModel):
+    """「立即巡检并告警」的返回：本次巡检报告 + 产生的告警。"""
+    report: QualityReportOut
+    alerts: List[QualityAlertOut] = []
+    score_threshold: float = 80.0
+    new_high_threshold: int = 1
+
+
+class ScoreTrendPoint(BaseModel):
+    created_at: Optional[datetime] = None
+    score: float = 100.0
+    issue_count: int = 0
+    high_issue_count: int = 0
+
+
+class ScoreTrendSeries(BaseModel):
+    points: List[ScoreTrendPoint] = []
+    count: int = 0
+    threshold: float = 80.0
+    latest: Optional[float] = None
+    first_to_latest_delta: Optional[float] = None

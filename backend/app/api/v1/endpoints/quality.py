@@ -17,8 +17,14 @@ from app.db.session import get_db
 from app.models.identity import User
 from app.schemas.common import ApiResponse, PageData
 from app.schemas.governance import GovernanceTaskOut
-from app.schemas.quality import (QualityInspectRequest, QualityIssueConvert,
-                                  QualityReportOut, QualityReportSummary)
+from app.schemas.quality import (AlertResolveRequest, QualityAlertOut,
+                                  QualityInspectRequest, QualityIssueConvert,
+                                  QualityReportOut, QualityReportSummary,
+                                  QualityScheduleRequest, ScheduleRunResult,
+                                  ScoreTrendSeries)
+from app.services.alert_service import (build_score_trend, delete_alert,
+                                         get_alert, list_alerts, resolve_alert,
+                                         run_scheduled_inspection)
 from app.services.quality_service import QualityInspector
 
 # RBAC：质量巡检接口全部要求有效 API Key
@@ -77,3 +83,88 @@ def convert_issue(payload: QualityIssueConvert, db: Session = Depends(get_db)):
         assignee=payload.assignee, priority=payload.priority, due_days=payload.due_days)
     return ApiResponse.ok(GovernanceTaskOut.model_validate(t),
                           "已生成治理任务", get_trace_id())
+
+
+# ------------------------------------------------------------------ Sprint7-T2
+@router.post("/schedule/trigger", response_model=ApiResponse[ScheduleRunResult],
+             summary="立即巡检并评估阈值告警（手动触发一次调度周期）")
+async def schedule_trigger(payload: QualityScheduleRequest, request: Request,
+                           db: Session = Depends(get_db)):
+    tenant_id = get_tenant_id(request)
+    report_result, alerts = await run_scheduled_inspection(
+        db, tenant_id, kb_id=payload.kb_id or None,
+        score_threshold=payload.score_threshold,
+        new_high_threshold=payload.new_high_threshold,
+        dup_threshold=payload.dup_threshold,
+        orphan_threshold=payload.orphan_threshold,
+        max_chunk_chars=payload.max_chunk_chars,
+        min_chunk_chars=payload.min_chunk_chars,
+        run_recall_probe=payload.run_recall_probe,
+    )
+    result = ScheduleRunResult(
+        report=QualityReportOut(**report_result),
+        alerts=[QualityAlertOut.model_validate(a) for a in alerts],
+        score_threshold=payload.score_threshold,
+        new_high_threshold=payload.new_high_threshold,
+    )
+    msg = (f"巡检完成，质量分 {report_result['score']:.1f}"
+           + (f"，触发 {len(alerts)} 条告警" if alerts else "，未触发告警"))
+    return ApiResponse.ok(result, msg, get_trace_id())
+
+
+@router.get("/alerts", response_model=ApiResponse[PageData[QualityAlertOut]],
+            summary="质量巡检告警列表（可按解决状态筛选）")
+def list_alert_endpoint(request: Request, resolved: Optional[bool] = None,
+                        page: int = Query(1, ge=1),
+                        page_size: int = Query(50, ge=1, le=200),
+                        db: Session = Depends(get_db)):
+    tenant_id = get_tenant_id(request)
+    items, total = list_alerts(
+        db, tenant_id=tenant_id, resolved=resolved,
+        limit=page_size, offset=(page - 1) * page_size)
+    return ApiResponse.ok(PageData[QualityAlertOut](
+        items=[QualityAlertOut.model_validate(i) for i in items],
+        total=total, page=page, page_size=page_size), trace_id=get_trace_id())
+
+
+@router.get("/alerts/{alert_id}", response_model=ApiResponse[QualityAlertOut],
+            summary="告警详情")
+def get_alert_endpoint(alert_id: str, db: Session = Depends(get_db)):
+    al = get_alert(db, alert_id)
+    if not al:
+        raise NotFoundError(f"告警不存在: {alert_id}")
+    return ApiResponse.ok(QualityAlertOut.model_validate(al), trace_id=get_trace_id())
+
+
+@router.post("/alerts/{alert_id}/resolve", response_model=ApiResponse[QualityAlertOut],
+             summary="解决/关闭告警")
+def resolve_alert_endpoint(alert_id: str, payload: AlertResolveRequest,
+                           db: Session = Depends(get_db)):
+    al = resolve_alert(db, alert_id, note=payload.note)
+    if not al:
+        raise NotFoundError(f"告警不存在: {alert_id}")
+    return ApiResponse.ok(QualityAlertOut.model_validate(al),
+                          "告警已解决", get_trace_id())
+
+
+@router.delete("/alerts/{alert_id}", response_model=ApiResponse[None],
+               summary="删除告警记录")
+def delete_alert_endpoint(alert_id: str, db: Session = Depends(get_db)):
+    if not delete_alert(db, alert_id):
+        raise NotFoundError(f"告警不存在: {alert_id}")
+    return ApiResponse.ok(None, "已删除告警", get_trace_id())
+
+
+@router.get("/score-trend", response_model=ApiResponse[ScoreTrendSeries],
+            summary="质量分趋势（用于趋势曲线，依赖 T1 趋势基础设施）")
+def score_trend_endpoint(request: Request,
+                         kb_id: Optional[str] = None,
+                         limit: int = Query(30, ge=2, le=100),
+                         threshold: float = Query(80.0, ge=0.0, le=100.0),
+                         db: Session = Depends(get_db)):
+    tenant_id = get_tenant_id(request)
+    series = build_score_trend(db, tenant_id=tenant_id,
+                               kb_id=kb_id or None, limit=limit,
+                               threshold=threshold)
+    return ApiResponse.ok(series, trace_id=get_trace_id())
+
