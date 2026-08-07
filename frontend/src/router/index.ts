@@ -40,6 +40,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '检索评测看板', icon: 'TrendCharts' }
   },
   {
+    path: '/quality',
+    name: 'quality',
+    component: () => import('@/views/QualityView.vue'),
+    meta: { title: '质量巡检 Agent', icon: 'Stamp' }
+  },
+  {
     path: '/:pathMatch(.*)*',
     redirect: '/chat'
   }

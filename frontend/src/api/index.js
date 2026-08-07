@@ -61,4 +61,11 @@ export const evalApi = {
     addGolden: (apiKey, data) => http.post('/eval/golden', data, { headers: { 'X-API-Key': apiKey } }),
     deleteGolden: (apiKey, id) => http.delete(`/eval/golden/${id}`, { headers: { 'X-API-Key': apiKey } })
 };
+// ---------------- 质量巡检 ----------------
+export const qualityApi = {
+    inspect: (apiKey, data) => http.post('/quality/inspect', data, { headers: { 'X-API-Key': apiKey } }),
+    reports: (apiKey, params) => http.get('/quality/reports', { params, headers: { 'X-API-Key': apiKey } }),
+    report: (apiKey, id) => http.get(`/quality/reports/${id}`, { headers: { 'X-API-Key': apiKey } }),
+    convert: (apiKey, data) => http.post('/quality/issues/convert', data, { headers: { 'X-API-Key': apiKey } })
+};
 export default http;

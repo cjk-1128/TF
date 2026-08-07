@@ -106,4 +106,16 @@ export const evalApi = {
     http.delete(`/eval/golden/${id}`, { headers: { 'X-API-Key': apiKey } }) as unknown as Promise<ApiResponse<any>>
 }
 
+// ---------------- 质量巡检 ----------------
+export const qualityApi = {
+  inspect: (apiKey: string, data: Record<string, any>) =>
+    http.post('/quality/inspect', data, { headers: { 'X-API-Key': apiKey } }) as unknown as Promise<ApiResponse<any>>,
+  reports: (apiKey: string, params?: Record<string, any>) =>
+    http.get('/quality/reports', { params, headers: { 'X-API-Key': apiKey } }) as unknown as Promise<ApiResponse<any>>,
+  report: (apiKey: string, id: string) =>
+    http.get(`/quality/reports/${id}`, { headers: { 'X-API-Key': apiKey } }) as unknown as Promise<ApiResponse<any>>,
+  convert: (apiKey: string, data: Record<string, any>) =>
+    http.post('/quality/issues/convert', data, { headers: { 'X-API-Key': apiKey } }) as unknown as Promise<ApiResponse<any>>
+}
+
 export default http
