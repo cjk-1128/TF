@@ -96,14 +96,22 @@ export const govApi = {
 
 // ---------------- 评测 ----------------
 export const evalApi = {
-  run: (apiKey: string) =>
-    http.post('/eval/run', {}, { headers: { 'X-API-Key': apiKey } }) as unknown as Promise<ApiResponse<any>>,
+  run: (apiKey: string, data?: Record<string, any>) =>
+    http.post('/eval/run', data || {}, { headers: { 'X-API-Key': apiKey } }) as unknown as Promise<ApiResponse<any>>,
   golden: (apiKey: string) =>
     http.get('/eval/golden', { headers: { 'X-API-Key': apiKey } }) as unknown as Promise<ApiResponse<any>>,
   addGolden: (apiKey: string, data: Record<string, any>) =>
     http.post('/eval/golden', data, { headers: { 'X-API-Key': apiKey } }) as unknown as Promise<ApiResponse<any>>,
   deleteGolden: (apiKey: string, id: string) =>
-    http.delete(`/eval/golden/${id}`, { headers: { 'X-API-Key': apiKey } }) as unknown as Promise<ApiResponse<any>>
+    http.delete(`/eval/golden/${id}`, { headers: { 'X-API-Key': apiKey } }) as unknown as Promise<ApiResponse<any>>,
+  runs: (apiKey: string, params?: Record<string, any>) =>
+    http.get('/eval/runs', { params, headers: { 'X-API-Key': apiKey } }) as unknown as Promise<ApiResponse<any>>,
+  runDetail: (apiKey: string, id: string) =>
+    http.get(`/eval/runs/${id}`, { headers: { 'X-API-Key': apiKey } }) as unknown as Promise<ApiResponse<any>>,
+  deleteRun: (apiKey: string, id: string) =>
+    http.delete(`/eval/runs/${id}`, { headers: { 'X-API-Key': apiKey } }) as unknown as Promise<ApiResponse<any>>,
+  trend: (apiKey: string, params?: Record<string, any>) =>
+    http.get('/eval/trend', { params, headers: { 'X-API-Key': apiKey } }) as unknown as Promise<ApiResponse<any>>
 }
 
 // ---------------- 质量巡检 ----------------

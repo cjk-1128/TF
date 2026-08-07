@@ -56,10 +56,14 @@ export const govApi = {
 };
 // ---------------- 评测 ----------------
 export const evalApi = {
-    run: (apiKey) => http.post('/eval/run', {}, { headers: { 'X-API-Key': apiKey } }),
+    run: (apiKey, data) => http.post('/eval/run', data || {}, { headers: { 'X-API-Key': apiKey } }),
     golden: (apiKey) => http.get('/eval/golden', { headers: { 'X-API-Key': apiKey } }),
     addGolden: (apiKey, data) => http.post('/eval/golden', data, { headers: { 'X-API-Key': apiKey } }),
-    deleteGolden: (apiKey, id) => http.delete(`/eval/golden/${id}`, { headers: { 'X-API-Key': apiKey } })
+    deleteGolden: (apiKey, id) => http.delete(`/eval/golden/${id}`, { headers: { 'X-API-Key': apiKey } }),
+    runs: (apiKey, params) => http.get('/eval/runs', { params, headers: { 'X-API-Key': apiKey } }),
+    runDetail: (apiKey, id) => http.get(`/eval/runs/${id}`, { headers: { 'X-API-Key': apiKey } }),
+    deleteRun: (apiKey, id) => http.delete(`/eval/runs/${id}`, { headers: { 'X-API-Key': apiKey } }),
+    trend: (apiKey, params) => http.get('/eval/trend', { params, headers: { 'X-API-Key': apiKey } })
 };
 // ---------------- 质量巡检 ----------------
 export const qualityApi = {

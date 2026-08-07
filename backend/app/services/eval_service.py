@@ -29,8 +29,14 @@ logger = get_logger(__name__)
 
 GOLDEN_PATH = Path(__file__).resolve().parents[2] / "data" / "eval_golden.json"
 CORPUS_PATH = Path(__file__).resolve().parents[2] / "data" / "eval_corpus.json"
+BASELINE_PATH = Path(__file__).resolve().parents[2] / "data" / "eval_baseline.json"
 DELIVERED_KS = [1, 3, 5]        # 重排后进入上下文的条数上限（RERANK_TOP_N=6）
 RETRIEVAL_KS = [1, 3, 5, 10, 20]  # 候选池诊断口径
+
+# 趋势/回归判定：核心指标低于基线超过该容差判为 regressed，高出则 improved
+REGRESSION_TOLERANCE = 0.02
+TREND_METRICS = ["recall_at_5", "ndcg_at_5", "mrr", "hit_rate",
+                 "correct_rejection_rate"]
 
 
 def load_golden(path: Path = GOLDEN_PATH) -> dict:
@@ -210,3 +216,185 @@ async def seed_eval_corpus(db: Session, tenant_id: str = "default",
                 kb.id, len(data.get("documents", [])), len(items))
     return {"version": 1, "tenant_id": tenant_id, "items": items, "_kb_id": kb.id}
 
+
+
+# ======================================================================
+# Sprint7：评测趋势持久化 + 基线对比 + 回归检测
+# ======================================================================
+from datetime import datetime  # noqa: E402
+from app.models.eval_run import EvalRun  # noqa: E402
+
+
+def load_baseline() -> dict:
+    """读取基线聚合指标（eval_baseline.json 的 data.aggregated）。缺失返回空。"""
+    if not BASELINE_PATH.exists():
+        return {}
+    try:
+        raw = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
+        return (raw.get("data") or {}).get("aggregated", {}) or {}
+    except Exception:  # noqa: BLE001
+        logger.warning("基线文件解析失败：%s", BASELINE_PATH)
+        return {}
+
+
+def _flat_metrics(aggregated: dict) -> Dict[str, float]:
+    """把嵌套聚合指标扁平化为趋势用的核心标量。"""
+    rc = aggregated.get("delivered_recall@k", {}) or {}
+    nd = aggregated.get("delivered_ndcg@k", {}) or {}
+
+    def _g(d: dict, k) -> float:
+        # 兼容 int / str 两种键
+        return float(d.get(k, d.get(str(k), 0.0)) or 0.0)
+
+    return {
+        "recall_at_1": _g(rc, 1),
+        "recall_at_3": _g(rc, 3),
+        "recall_at_5": _g(rc, 5),
+        "ndcg_at_5": _g(nd, 5),
+        "mrr": float(aggregated.get("delivered_mrr", 0.0) or 0.0),
+        "hit_rate": float(aggregated.get("hit_rate", 0.0) or 0.0),
+        "full_hit_rate": float(aggregated.get("full_hit_rate", 0.0) or 0.0),
+        "below_floor_rate": float(aggregated.get("below_floor_rate", 0.0) or 0.0),
+        "correct_rejection_rate": float(aggregated.get("correct_rejection_rate", 0.0) or 0.0),
+        "candidate_recall_at_20": float(aggregated.get("candidate_recall@20", 0.0) or 0.0),
+    }
+
+
+def compute_baseline_delta(aggregated: dict,
+                            baseline: Optional[dict] = None) -> Dict[str, float]:
+    """当前聚合指标相对基线的差值（正=更好；correct_rejection 同向）。"""
+    baseline = baseline if baseline is not None else load_baseline()
+    if not baseline:
+        return {}
+    cur = _flat_metrics(aggregated)
+    base = _flat_metrics(baseline)
+    return {m: round(cur[m] - base[m], 4) for m in TREND_METRICS if m in cur and m in base}
+
+
+def classify_status(delta: Dict[str, float]) -> str:
+    """根据核心指标差值判定 improved / regressed / ok。
+    任一核心指标跌破容差 → regressed；否则若有明显提升 → improved；其余 ok。"""
+    if not delta:
+        return "ok"
+    if any(v < -REGRESSION_TOLERANCE for v in delta.values()):
+        return "regressed"
+    if any(v > REGRESSION_TOLERANCE for v in delta.values()):
+        return "improved"
+    return "ok"
+
+
+def _slim_per_query(per_query: List[dict]) -> List[dict]:
+    """趋势快照只保留逐题的关键字段，剔除超长 ranked_ids。"""
+    slim = []
+    for p in per_query:
+        dm = p.get("delivered_metrics", {})
+        slim.append({
+            "id": p.get("id"),
+            "query": p.get("query"),
+            "expected_intent": p.get("expected_intent"),
+            "intent": p.get("intent"),
+            "negative": p.get("negative"),
+            "below_floor": p.get("below_floor"),
+            "hits_delivered": p.get("hits_delivered"),
+            "relevant_count": p.get("relevant_count"),
+            "recall@5": (dm.get("recall", {}) or {}).get(5, (dm.get("recall", {}) or {}).get("5")),
+            "mrr": dm.get("mrr"),
+        })
+    return slim
+
+
+def persist_eval_run(db: Session, result: dict, *, tenant_id: str = "default",
+                      source: str = "api", note: str = "",
+                      duration_ms: int = 0) -> EvalRun:
+    """把一次评测结果落库为趋势快照，并计算相对基线的状态。"""
+    aggregated = result.get("aggregated", {}) or {}
+    flat = _flat_metrics(aggregated)
+    delta = compute_baseline_delta(aggregated)
+    status = classify_status(delta)
+
+    run = EvalRun(
+        tenant_id=tenant_id,
+        kb_ids=result.get("kb_ids", []),
+        golden_version=result.get("golden_version") or 1,
+        n_queries=result.get("n_queries", 0),
+        n_positive=result.get("n_positive", 0),
+        n_negative=result.get("n_negative", 0),
+        aggregated=aggregated,
+        per_query=_slim_per_query(result.get("per_query", [])),
+        baseline_delta=delta,
+        status=status,
+        source=source,
+        duration_ms=duration_ms,
+        note=note[:255],
+        created_at=datetime.utcnow(),
+        **flat,
+    )
+    db.add(run)
+    db.commit()
+    db.refresh(run)
+    logger.info("评测快照落库 | id=%s | status=%s | recall@5=%.4f | mrr=%.4f",
+                run.id, status, flat["recall_at_5"], flat["mrr"])
+    return run
+
+
+def list_eval_runs(db: Session, tenant_id: str = "default",
+                    limit: int = 50, offset: int = 0):
+    """按时间倒序列出评测快照。返回 (items, total)。"""
+    q = db.query(EvalRun).filter(EvalRun.tenant_id == tenant_id)
+    total = q.count()
+    items = (q.order_by(EvalRun.created_at.desc())
+             .offset(offset).limit(limit).all())
+    return items, total
+
+
+def get_eval_run(db: Session, run_id: str) -> Optional[EvalRun]:
+    return db.query(EvalRun).filter(EvalRun.id == run_id).first()
+
+
+def delete_eval_run(db: Session, run_id: str) -> bool:
+    run = get_eval_run(db, run_id)
+    if not run:
+        return False
+    db.delete(run)
+    db.commit()
+    return True
+
+
+def build_trend(db: Session, tenant_id: str = "default", limit: int = 30) -> dict:
+    """构建趋势序列（时间正序），含基线、最新值、首末差值与回归/改进计数。"""
+    runs, _ = list_eval_runs(db, tenant_id=tenant_id, limit=limit, offset=0)
+    runs = list(reversed(runs))  # 时间正序，便于画曲线
+    points = [{
+        "id": r.id,
+        "created_at": r.created_at,
+        "recall_at_5": r.recall_at_5,
+        "ndcg_at_5": r.ndcg_at_5,
+        "mrr": r.mrr,
+        "hit_rate": r.hit_rate,
+        "correct_rejection_rate": r.correct_rejection_rate,
+        "status": r.status,
+        "source": r.source,
+        "note": r.note or "",
+    } for r in runs]
+
+    baseline = _flat_metrics(load_baseline()) if load_baseline() else {}
+    baseline = {m: baseline.get(m, 0.0) for m in TREND_METRICS} if baseline else {}
+
+    latest, first_to_latest_delta = {}, {}
+    if runs:
+        last = runs[-1]
+        latest = {m: getattr(last, m) for m in TREND_METRICS}
+        if len(runs) >= 2:
+            first = runs[0]
+            first_to_latest_delta = {
+                m: round(getattr(last, m) - getattr(first, m), 4) for m in TREND_METRICS}
+
+    return {
+        "points": points,
+        "count": len(points),
+        "baseline": baseline,
+        "latest": latest,
+        "first_to_latest_delta": first_to_latest_delta,
+        "regressed_count": sum(1 for r in runs if r.status == "regressed"),
+        "improved_count": sum(1 for r in runs if r.status == "improved"),
+    }
