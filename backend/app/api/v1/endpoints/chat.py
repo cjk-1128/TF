@@ -4,12 +4,14 @@ from __future__ import annotations
 import json
 from typing import List
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.logging import get_trace_id
+from app.core.security import get_current_user, get_tenant_id
 from app.db.session import get_db
+from app.models.identity import User
 from app.schemas.chat import (ChatRequest, ChatResponse, ConversationCreate,
                               ConversationOut, FeedbackRequest, MessageOut,
                               RetrievedChunk, SearchRequest)
@@ -21,19 +23,25 @@ router = APIRouter()
 
 
 @router.post("/chat", response_model=ApiResponse[ChatResponse], summary="工程智能问答")
-async def chat(req: ChatRequest, db: Session = Depends(get_db)):
-    res = await ChatService(db).chat(req)
+async def chat(req: ChatRequest, request: Request,
+              db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    tenant_id = get_tenant_id(request)
+    res = await ChatService(db).chat(req, tenant_id=tenant_id, user=user)
     return ApiResponse.ok(res, trace_id=get_trace_id())
 
 
 @router.post("/chat/stream", summary="工程智能问答（SSE 流式）")
-async def chat_stream(req: ChatRequest, db: Session = Depends(get_db)):
+async def chat_stream(req: ChatRequest, request: Request,
+                     db: Session = Depends(get_db),
+                     user: User = Depends(get_current_user)):
     """
     先完整跑完 Stage0-Stage7（保证引用与可信度完整），
     再按字符流式推送答案，最后推送引用与追踪信息。
     """
+    tenant_id = get_tenant_id(request)
+
     async def gen():
-        res = await ChatService(db).chat(req)
+        res = await ChatService(db).chat(req, tenant_id=tenant_id, user=user)
         yield f"event: meta\ndata: {json.dumps({'conversation_id': res.conversation_id, 'message_id': res.message_id, 'intent': res.intent, 'intent_label': res.intent_label, 'retrieval_strategy': res.retrieval_strategy, 'out_of_scope': res.out_of_scope}, ensure_ascii=False)}\n\n"
         buf = res.answer
         for i in range(0, len(buf), 20):
@@ -56,15 +64,23 @@ async def chat_stream(req: ChatRequest, db: Session = Depends(get_db)):
 
 @router.post("/search", response_model=ApiResponse[List[RetrievedChunk]],
              summary="纯检索（不生成）")
-async def search(req: SearchRequest, db: Session = Depends(get_db)):
+async def search(req: SearchRequest, request: Request,
+                db: Session = Depends(get_db),
+                user: User = Depends(get_current_user)):
+    tenant_id = get_tenant_id(request)
+    # 检索范围限制在当前租户内可访问的知识库
+    req.kb_ids = ChatService(db)._resolve_kb_ids(req.kb_ids, tenant_id, user)
     items = await SearchService(db).search(req)
     return ApiResponse.ok(items, f"命中 {len(items)} 条", get_trace_id())
 
 
 # ==================== 会话 ====================
 @router.post("/conversations", response_model=ApiResponse[ConversationOut], summary="创建会话")
-def create_conversation(payload: ConversationCreate, db: Session = Depends(get_db)):
+def create_conversation(payload: ConversationCreate, request: Request,
+                        db: Session = Depends(get_db),
+                        user: User = Depends(get_current_user)):
     c = ChatService(db).create_conversation(payload)
+    c.tenant_id = get_tenant_id(request)
     return ApiResponse.ok(ConversationOut.model_validate(c), "创建成功", get_trace_id())
 
 
@@ -72,8 +88,11 @@ def create_conversation(payload: ConversationCreate, db: Session = Depends(get_d
             summary="会话列表")
 def list_conversations(user_id: str = "", page: int = Query(1, ge=1),
                        page_size: int = Query(20, ge=1, le=100),
+                       request: Request = None,
                        db: Session = Depends(get_db)):
-    items, total = ChatService(db).list_conversations(user_id, (page - 1) * page_size, page_size)
+    tenant_id = get_tenant_id(request) if request else None
+    items, total = ChatService(db).list_conversations(
+        user_id, (page - 1) * page_size, page_size, tenant_id=tenant_id)
     return ApiResponse.ok(PageData[ConversationOut](
         items=[ConversationOut.model_validate(i) for i in items],
         total=total, page=page, page_size=page_size), trace_id=get_trace_id())

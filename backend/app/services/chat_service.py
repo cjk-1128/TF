@@ -9,8 +9,11 @@ from sqlalchemy.orm import Session
 from app.core.constants import QueryIntent
 from app.core.exceptions import NotFoundError
 from app.core.logging import get_logger
+from app.core.security import can_access_kb
 from app.models.conversation import Citation, Conversation, Message
 from app.models.governance import FeedbackRecord, QueryLog
+from app.models.identity import User
+from app.models.knowledge import KnowledgeBase
 from app.rag.pipeline import get_pipeline
 from app.rag.state import RAGState
 from app.schemas.chat import (ChatRequest, ChatResponse, CitationOut,
@@ -45,8 +48,11 @@ class ChatService:
         return c
 
     def list_conversations(self, user_id: str = "", offset: int = 0,
-                           limit: int = 20) -> Tuple[List[Conversation], int]:
+                           limit: int = 20, tenant_id: Optional[str] = None
+                           ) -> Tuple[List[Conversation], int]:
         q = self.db.query(Conversation)
+        if tenant_id:
+            q = q.filter(Conversation.tenant_id == tenant_id)
         if user_id:
             q = q.filter(Conversation.user_id == user_id)
         total = q.count()
@@ -62,8 +68,19 @@ class ChatService:
                 .filter(Message.conversation_id == conv_id)
                 .order_by(Message.created_at).all())
 
+    def _resolve_kb_ids(self, requested, tenant_id: str,
+                        user: User | None) -> List[str]:
+        """解析检索范围：仅保留当前租户内用户可访问的知识库 ID。"""
+        q = self.db.query(KnowledgeBase).filter(KnowledgeBase.is_active.is_(True))
+        if requested:
+            kbs = q.filter(KnowledgeBase.id.in_(list(requested))).all()
+        else:
+            kbs = q.filter(KnowledgeBase.tenant_id == tenant_id).all()
+        return [kb.id for kb in kbs if can_access_kb(user, kb)]
+
     # ==================== RAG 问答 ====================
-    async def chat(self, req: ChatRequest) -> ChatResponse:
+    async def chat(self, req: ChatRequest, tenant_id: str = "default",
+                   user: User | None = None) -> ChatResponse:
         # 1. 会话准备
         if req.conversation_id:
             conv = self.get_conversation(req.conversation_id)
@@ -73,6 +90,7 @@ class ChatService:
                 kb_ids=req.kb_ids,
                 context=req.context or ConversationCreate().context,
             ))
+        conv.tenant_id = tenant_id  # Sprint4 多租户隔离
         if req.context:
             conv.project_name = req.context.project_name or conv.project_name
             conv.project_type = req.context.project_type or conv.project_type
@@ -80,6 +98,9 @@ class ChatService:
             conv.region = req.context.region or conv.region
         if req.kb_ids:
             conv.kb_ids = req.kb_ids
+
+        # 解析检索范围：仅限当前租户内用户可访问的知识库（防止跨租户泄漏）
+        resolved_kb_ids = self._resolve_kb_ids(req.kb_ids, tenant_id, user)
 
         # 2. 用户消息落库
         user_msg = Message(conversation_id=conv.id, role="user", content=req.query)
@@ -89,7 +110,7 @@ class ChatService:
         # 3. 执行 Pipeline
         state = RAGState(
             query=req.query, conversation_id=conv.id, user_id=req.user_id,
-            kb_ids=req.kb_ids or list(conv.kb_ids or []),
+            kb_ids=resolved_kb_ids,
             domains=[d.value for d in req.domains],
             top_k=req.top_k,
             project_name=conv.project_name or "", project_type=conv.project_type or "",

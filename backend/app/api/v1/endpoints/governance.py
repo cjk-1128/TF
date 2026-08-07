@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.logging import get_trace_id
+from app.core.security import get_current_user
 from app.db.session import get_db
 from app.schemas.common import ApiResponse, PageData
 from app.schemas.governance import (GovernanceDashboard, GovernanceTaskCreate,
@@ -15,7 +16,8 @@ from app.schemas.governance import (GovernanceDashboard, GovernanceTaskCreate,
                                     KnowledgeGapOut, OperationReport)
 from app.services.governance_service import GovernanceService
 
-router = APIRouter()
+# Sprint4 RBAC：治理接口全部要求有效 API Key
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 @router.get("/health-report", response_model=ApiResponse[KBHealthReport],

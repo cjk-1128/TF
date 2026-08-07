@@ -79,3 +79,24 @@ def init_db() -> None:
         logger.warning("Alembic 迁移失败，回退 create_all: %s", exc)
         Base.metadata.create_all(bind=engine)
         logger.info("数据库初始化完成(create_all) | %s", settings.DATABASE_URL.split("@")[-1])
+    _seed_default_user()
+
+
+def _seed_default_user() -> None:
+    """首次启动若 tf_user 为空，创建默认管理员（api_key 取自 BOOTSTRAP_API_KEY）。"""
+    from app.models.identity import ROLE_ADMIN, User
+    db = SessionLocal()
+    try:
+        if db.query(User).count() == 0:
+            db.add(User(
+                username="admin", display_name="默认管理员",
+                api_key=settings.BOOTSTRAP_API_KEY, role=ROLE_ADMIN,
+                tenant_id=settings.DEFAULT_TENANT_ID))
+            db.commit()
+            logger.info("已创建默认管理员 | username=admin | api_key=%s",
+                        settings.BOOTSTRAP_API_KEY)
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        logger.warning("默认管理员 seed 失败（可忽略）: %s", exc)
+    finally:
+        db.close()

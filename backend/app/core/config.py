@@ -96,6 +96,16 @@ class Settings(BaseSettings):
     # 是否允许把"与工程无关"的问题标记为越域（越域的 unknown 问题不强行检索）
     INTENT_OUT_OF_SCOPE: bool = True
 
+    # ---------------- 多租户 / RBAC（Sprint 4）----------------
+    # 租户隔离维度：所有 KB/文档/切片/会话按 tenant_id 过滤；请求头 X-Tenant-Id 指定。
+    DEFAULT_TENANT_ID: str = "default"
+    # 是否启用 API-Key 鉴权（写操作 + 问答强制）；关闭时一律以虚拟 admin 放行（仅演示用）。
+    RBAC_ENABLED: bool = True
+    # 首次启动若 tf_user 为空，自动 seed 的默认管理员 api_key（X-API-Key 携带）。
+    BOOTSTRAP_API_KEY: str = "tf-admin-seed-key"
+    API_KEY_HEADER: str = "X-API-Key"
+    TENANT_HEADER: str = "X-Tenant-Id"
+
     # ---------------- 文档处理 ----------------
     UPLOAD_DIR: str = str(PROJECT_ROOT / "data" / "uploads")
     MAX_UPLOAD_MB: int = 100

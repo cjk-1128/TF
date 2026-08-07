@@ -17,6 +17,10 @@ class KnowledgeBaseCreate(BaseModel):
     description: str = ""
     owner: str = ""
     tags: List[str] = []
+    # Sprint4：多租户 / 可见性（创建时可省略，由服务端按当前租户填充）
+    tenant_id: Optional[str] = None
+    visibility: str = "tenant"          # public | tenant | private
+    allowed_roles: Optional[List[str]] = None
 
 
 class KnowledgeBaseUpdate(BaseModel):
@@ -25,6 +29,8 @@ class KnowledgeBaseUpdate(BaseModel):
     owner: Optional[str] = None
     tags: Optional[List[str]] = None
     is_active: Optional[bool] = None
+    visibility: Optional[str] = None
+    allowed_roles: Optional[List[str]] = None
 
 
 class KnowledgeBaseOut(BaseModel):
@@ -39,8 +45,55 @@ class KnowledgeBaseOut(BaseModel):
     doc_count: int = 0
     chunk_count: int = 0
     is_active: bool = True
+    tenant_id: str = "default"
+    visibility: str = "tenant"
+    allowed_roles: Optional[List[str]] = None
+    active_version_id: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+
+# ---------------- 版本管理（Sprint4）----------------
+class KBVersionCreate(BaseModel):
+    label: str = ""
+    note: str = ""
+
+
+class KBVersionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    kb_id: str
+    version_no: int = 1
+    label: str = ""
+    note: str = ""
+    doc_count: int = 0
+    chunk_count: int = 0
+    doc_ids: Optional[List[str]] = None
+    chunk_ids: Optional[List[str]] = None
+    created_by: str = "system"
+    created_at: Optional[datetime] = None
+
+
+class KBVersionDiff(BaseModel):
+    version_id: str
+    version_no: int
+    removed_since_version: List[str] = []
+    added_since_version: List[str] = []
+    current_doc_count: int = 0
+    version_doc_count: int = 0
+
+
+# ---------------- 用户（Sprint4 RBAC）----------------
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    username: str
+    display_name: str = ""
+    role: str = "viewer"
+    tenant_id: str = "default"
+    is_active: bool = True
+    api_key: str = ""
+    created_at: Optional[datetime] = None
 
 
 # ---------------- 文档 ----------------

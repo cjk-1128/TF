@@ -31,12 +31,26 @@ class KnowledgeBase(Base):
     doc_count = Column(Integer, default=0)
     chunk_count = Column(Integer, default=0)
     is_active = Column(Boolean, default=True)
+
+    # ---- Sprint4: 多租户 / 可见性 / 版本 ----
+    tenant_id = Column(String(32), nullable=False, default="default",
+                       comment="租户ID，多租户隔离维度", index=True)
+    visibility = Column(String(16), nullable=False, default="tenant",
+                        comment="可见性: public(全租户) | tenant(同租户) | private(按角色)")
+    allowed_roles = Column(JSON, nullable=True,
+                           comment="visibility=private 时允许访问的角色列表")
+    active_version_id = Column(String(32), nullable=True,
+                                comment="当前生效的知识库版本(回滚指针)")
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     documents = relationship("Document", back_populates="kb", cascade="all, delete-orphan")
 
-    __table_args__ = (Index("idx_kb_domain", "domain"),)
+    __table_args__ = (
+        Index("idx_kb_domain", "domain"),
+        Index("idx_kb_tenant", "tenant_id"),
+    )
 
 
 class Document(Base):
@@ -72,6 +86,12 @@ class Document(Base):
     status = Column(String(16), default=DocumentStatus.PENDING.value)
     error_msg = Column(Text, default="")
     chunk_count = Column(Integer, default=0)
+
+    # ---- Sprint4: 多租户 / 软删（支撑版本回滚）----
+    tenant_id = Column(String(32), nullable=False, default="default", index=True)
+    is_deleted = Column(Boolean, nullable=False, default=False, index=True,
+                        comment="软删除标记：版本回滚时用于隔离/恢复切片")
+
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -94,6 +114,11 @@ class Chunk(Base):
     doc_id = Column(String(32), ForeignKey("tf_document.id", ondelete="CASCADE"), nullable=False)
     kb_id = Column(String(32), nullable=False, index=True)
     domain = Column(String(32), nullable=False, default=KnowledgeDomain.STANDARD.value)
+
+    # ---- Sprint4: 多租户 / 软删 ----
+    tenant_id = Column(String(32), nullable=False, default="default", index=True)
+    is_deleted = Column(Boolean, nullable=False, default=False, index=True,
+                        comment="软删除标记：与 Document 同步，支撑版本回滚")
 
     seq = Column(Integer, default=0, comment="文档内顺序")
     content = Column(Text, nullable=False)

@@ -23,6 +23,9 @@ class Conversation(Base):
     title = Column(String(256), default="新会话")
     user_id = Column(String(64), default="anonymous", index=True)
 
+    # ---- Sprint4: 多租户隔离维度 ----
+    tenant_id = Column(String(32), nullable=False, default="default", index=True)
+
     # ---- 工程上下文 ----
     project_name = Column(String(256), default="", comment="工程项目名")
     project_type = Column(String(64), default="", comment="工程类型 房建/市政/桥梁")

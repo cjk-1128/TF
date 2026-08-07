@@ -35,23 +35,31 @@ class KnowledgeService:
         self.chunker = EngineeringChunker()
 
     # ==================== 知识库 ====================
-    def create_kb(self, payload: KnowledgeBaseCreate) -> KnowledgeBase:
+    def create_kb(self, payload: KnowledgeBaseCreate,
+                  tenant_id: str = "default") -> KnowledgeBase:
         exists = self.db.query(KnowledgeBase).filter(
-            KnowledgeBase.name == payload.name).first()
+            KnowledgeBase.name == payload.name,
+            KnowledgeBase.tenant_id == tenant_id).first()
         if exists:
-            raise ValidationError(f"知识库名称已存在: {payload.name}")
+            raise ValidationError(f"当前租户下知识库名称已存在: {payload.name}")
         kb = KnowledgeBase(
             name=payload.name, domain=payload.domain.value,
             description=payload.description, owner=payload.owner,
             tags=payload.tags or [],
+            tenant_id=tenant_id,
+            visibility=getattr(payload, "visibility", "tenant") or "tenant",
+            allowed_roles=payload.allowed_roles or None,
         )
         self.db.add(kb)
         self.db.flush()
-        logger.info("创建知识库 | %s | %s", kb.name, kb.domain)
+        logger.info("创建知识库 | %s | %s | tenant=%s", kb.name, kb.domain, tenant_id)
         return kb
 
-    def list_kb(self, domain: Optional[str] = None, keyword: str = "") -> List[KnowledgeBase]:
-        q = self.db.query(KnowledgeBase)
+    def list_kb(self, domain: Optional[str] = None, keyword: str = "",
+                tenant_id: Optional[str] = None) -> List[KnowledgeBase]:
+        q = self.db.query(KnowledgeBase).filter(KnowledgeBase.is_active.is_(True))
+        if tenant_id:
+            q = q.filter(KnowledgeBase.tenant_id == tenant_id)
         if domain:
             q = q.filter(KnowledgeBase.domain == domain)
         if keyword:
@@ -59,7 +67,8 @@ class KnowledgeService:
         return q.order_by(KnowledgeBase.created_at.desc()).all()
 
     def get_kb(self, kb_id: str) -> KnowledgeBase:
-        kb = self.db.query(KnowledgeBase).filter(KnowledgeBase.id == kb_id).first()
+        kb = self.db.query(KnowledgeBase).filter(
+            KnowledgeBase.id == kb_id, KnowledgeBase.is_active.is_(True)).first()
         if not kb:
             raise NotFoundError(f"知识库不存在: {kb_id}")
         return kb
@@ -76,9 +85,9 @@ class KnowledgeService:
         if not kb:
             return
         kb.doc_count = self.db.query(func.count(Document.id)).filter(
-            Document.kb_id == kb_id).scalar() or 0
+            Document.kb_id == kb_id, Document.is_deleted.is_(False)).scalar() or 0
         kb.chunk_count = self.db.query(func.count(Chunk.id)).filter(
-            Chunk.kb_id == kb_id).scalar() or 0
+            Chunk.kb_id == kb_id, Chunk.is_deleted.is_(False)).scalar() or 0
         kb.updated_at = datetime.utcnow()
 
     # ==================== 文档 ====================
@@ -125,6 +134,7 @@ class KnowledgeService:
             expire_date=meta.expire_date,
             tags=meta.tags or [],
             status=DocumentStatus.PARSING.value,
+            tenant_id=kb.tenant_id,
         )
         self.db.add(doc)
         self.db.flush()
@@ -178,6 +188,7 @@ class KnowledgeService:
             tags=meta.tags or [], status=DocumentStatus.CHUNKING.value,
             summary=make_summary(content, 220),
             keywords=extract_keywords(content[:8000], 15),
+            tenant_id=kb.tenant_id,
         )
         self.db.add(doc)
         self.db.flush()
@@ -210,6 +221,7 @@ class KnowledgeService:
                 section_path=cd.section_path, clause_no=cd.clause_no,
                 page_no=cd.page_no, discipline=doc.discipline,
                 is_mandatory=cd.is_mandatory, extra=cd.extra or {},
+                tenant_id=kb.tenant_id, is_deleted=False,
             ))
         self.db.add_all(rows)
         self.db.flush()
@@ -241,10 +253,13 @@ class KnowledgeService:
 
     def list_documents(self, kb_id: Optional[str] = None, status: Optional[str] = None,
                        governance_status: Optional[str] = None, keyword: str = "",
+                       tenant_id: Optional[str] = None,
                        offset: int = 0, limit: int = 20) -> Tuple[List[Document], int]:
-        q = self.db.query(Document)
+        q = self.db.query(Document).filter(Document.is_deleted.is_(False))
         if kb_id:
             q = q.filter(Document.kb_id == kb_id)
+        if tenant_id:
+            q = q.filter(Document.tenant_id == tenant_id)
         if status:
             q = q.filter(Document.status == status)
         if governance_status:
@@ -263,15 +278,75 @@ class KnowledgeService:
         return d
 
     def delete_document(self, doc_id: str) -> None:
+        """软删除文档：标记 is_deleted 并从检索索引移除（保留数据，支撑版本回滚）。"""
         d = self.get_document(doc_id)
         kb_id = d.kb_id
-        self._purge_indexes(doc_id)
+        self.db.query(Chunk).filter(Chunk.doc_id == doc_id).update(
+            {Chunk.is_deleted: True})
+        d.is_deleted = True
+        self.db.flush()
+        self._purge_indexes(doc_id)  # 同步移除向量/BM25，避免被检索到
         if d.file_path:
             Path(d.file_path).unlink(missing_ok=True)
-        self.db.delete(d)
-        self.db.flush()
         self.refresh_kb_stats(kb_id)
-        logger.info("删除文档 | %s", doc_id)
+        logger.info("软删除文档 | %s", doc_id)
+
+    async def restore_document(self, doc_id: str) -> Document:
+        """恢复软删除文档并重建检索索引（版本回滚时调用）。"""
+        d = self.db.query(Document).filter(Document.id == doc_id).first()
+        if not d:
+            raise NotFoundError(f"文档不存在: {doc_id}")
+        d.is_deleted = False
+        chunks = self.db.query(Chunk).filter(Chunk.doc_id == doc_id).all()
+        for c in chunks:
+            c.is_deleted = False
+        self.db.flush()
+        kb = self.get_kb(d.kb_id)
+        await self._reindex_existing(d, kb)
+        self.refresh_kb_stats(d.kb_id)
+        logger.info("恢复文档 | %s", doc_id)
+        return d
+
+    async def _reindex_existing(self, doc: Document, kb: KnowledgeBase) -> None:
+        """对已落库切片重新向量化并写回双索引（恢复/回滚用）。"""
+        chunks = self.db.query(Chunk).filter(
+            Chunk.doc_id == doc.id, Chunk.is_deleted.is_(False)).all()
+        if not chunks:
+            return
+        embed = get_embedding()
+        vectors = await embed.embed_texts([c.content for c in chunks])
+        vs = get_vector_store()
+        vs.ensure_collection(len(vectors[0]) if vectors else settings.EMBEDDING_DIM)
+        records, bm_items = [], []
+        for c, v in zip(chunks, vectors):
+            meta = {
+                "doc_id": doc.id, "kb_id": doc.kb_id, "domain": kb.domain,
+                "discipline": doc.discipline, "content": c.content,
+                "doc_title": doc.title, "standard_code": doc.standard_code or "",
+                "section_path": c.section_path, "clause_no": c.clause_no,
+                "page_no": c.page_no, "is_mandatory": c.is_mandatory,
+                "governance_status": doc.governance_status,
+            }
+            records.append(VectorRecord(
+                id=c.id, vector=v, doc_id=doc.id, kb_id=doc.kb_id, domain=kb.domain,
+                discipline=doc.discipline, content=c.content, meta=meta))
+            bm_items.append((c.id, c.content, meta))
+            c.vector_id = c.id
+        vs.upsert(records)
+        get_bm25_index().add(bm_items)
+
+    def list_chunks(self, doc_id: str, offset: int = 0, limit: int = 50,
+                    keyword: str = ""):
+        q = self.db.query(Chunk).filter(Chunk.doc_id == doc_id,
+                                        Chunk.is_deleted.is_(False))
+        if keyword:
+            like = f"%{keyword}%"
+            q = q.filter(or_(Chunk.content.like(like),
+                             Chunk.section_path.like(like),
+                             Chunk.clause_no.like(like)))
+        total = q.count()
+        items = q.order_by(Chunk.seq).offset(offset).limit(limit).all()
+        return items, total
 
     def update_document(self, doc_id: str, **fields) -> Document:
         d = self.get_document(doc_id)
@@ -341,24 +416,36 @@ class KnowledgeService:
         self.refresh_kb_stats(kb.id)
         return doc
 
-    def stats(self) -> dict:
+    def stats(self, tenant_id: Optional[str] = None) -> dict:
+        kb_q = self.db.query(KnowledgeBase)
+        doc_q = self.db.query(Document).filter(Document.is_deleted.is_(False))
+        chunk_q = self.db.query(Chunk).filter(Chunk.is_deleted.is_(False))
+        if tenant_id:
+            kb_q = kb_q.filter(KnowledgeBase.tenant_id == tenant_id)
+            doc_q = doc_q.filter(Document.tenant_id == tenant_id)
+            chunk_q = chunk_q.filter(Chunk.tenant_id == tenant_id)
+
         def _domain_docs(domain: str) -> int:
             return (self.db.query(func.count(Document.id))
                     .join(KnowledgeBase, KnowledgeBase.id == Document.kb_id)
-                    .filter(KnowledgeBase.domain == domain).scalar() or 0)
+                    .filter(KnowledgeBase.domain == domain,
+                            Document.is_deleted.is_(False),
+                            Document.tenant_id == tenant_id if tenant_id else True)
+                    .scalar() or 0)
 
         return {
-            "kb_count": self.db.query(func.count(KnowledgeBase.id)).scalar() or 0,
-            "doc_count": self.db.query(func.count(Document.id)).scalar() or 0,
-            "chunk_count": self.db.query(func.count(Chunk.id)).scalar() or 0,
+            "tenant_id": tenant_id or "*",
+            "kb_count": kb_q.filter(KnowledgeBase.is_active.is_(True)).count(),
+            "doc_count": doc_q.count(),
+            "chunk_count": chunk_q.count(),
             "vector_count": get_vector_store().count(),
             "bm25_count": get_bm25_index().count(),
-            "ready_docs": self.db.query(func.count(Document.id)).filter(
-                Document.status == DocumentStatus.READY.value).scalar() or 0,
-            "failed_docs": self.db.query(func.count(Document.id)).filter(
-                Document.status == DocumentStatus.FAILED.value).scalar() or 0,
-            "mandatory_chunks": self.db.query(func.count(Chunk.id)).filter(
-                Chunk.is_mandatory.is_(True)).scalar() or 0,
+            "ready_docs": doc_q.filter(
+                Document.status == DocumentStatus.READY.value).count(),
+            "failed_docs": doc_q.filter(
+                Document.status == DocumentStatus.FAILED.value).count(),
+            "mandatory_chunks": chunk_q.filter(
+                Chunk.is_mandatory.is_(True)).count(),
             "standard_docs": _domain_docs(KnowledgeDomain.STANDARD.value),
             "case_docs": _domain_docs(KnowledgeDomain.CASE.value),
             "enterprise_docs": _domain_docs(KnowledgeDomain.ENTERPRISE.value),
