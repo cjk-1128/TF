@@ -1,36 +1,24 @@
-# ===== 版本控制 / CI =====
-.git
-.github
-
-# ===== Python =====
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.venv/
-venv/
-*.egg-info/
-
-# ===== 前端 =====
+# 减小 Docker build context 体积，避免把无关大目录打进镜像
+frontend/
 node_modules/
-frontend/node_modules/
-frontend/dist/
-
-# ===== 运行时数据 / 日志 / 密钥 =====
+.git/
+.gitignore
+*.rar
+*.db
+*.sqlite3
 data/
 logs/
-*.db
-*.db-shm
-*.db-wal
-*.log
-.env
-.env.*
-!.env.example
-
-# ===== 测试 & 文档（不进运行镜像） =====
+vectorstore/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
 tests/
-docs/
-
-# ===== 系统 =====
-.DS_Store
-.idea
-.vscode
+scripts/
+.venv/
+venv/
+*.md
+# 运行时 bind 挂载源目录，不要打进镜像构建上下文
+docker_data/
+docker_logs/
+docker_vector/

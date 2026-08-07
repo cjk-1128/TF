@@ -1,0 +1,38 @@
+# TerraForge 容器编排（Phase 0：仅 web，SQLite 卷持久化）
+# Phase 1+ 将按需接入 MySQL+Milvus+Redis（复用同机 KnowForge 容器底座，不再新建 PG）。
+#
+# 说明：
+# - build context 为项目根，dockerfile 指向 backend/Dockerfile，COPY 以 backend/ 为基准。
+# - 端口 8002:8001：宿主机 8002 避开 systemd 现有 8001 与 KnowForge 8000，便于并行验证不破坏生产服务。
+#   正式切换时把 "8002:8001" 改为 "8001:8001" 并停掉 systemd 服务即可。
+# - 使用 bind 挂载（而非命名卷）便于从现有 8001 库预填 77-chunk 评测数据与向量索引到 docker_data/docker_vector，
+#   从而让容器化实例独立运行且能跑通 verify_sprintC（vector_count==77）。三个目录均为新建，与 systemd 数据隔离。
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: terraforge:latest
+    container_name: terraforge
+    env_file:
+      - .env
+    environment:
+      # 容器内 config.py 默认已指向 /app/data，这里显式声明以保持清晰
+      DATABASE_URL: sqlite:////app/data/terraforge.db
+      LOCAL_VECTOR_DIR: /app/vectorstore
+      LOG_DIR: /app/logs
+      UPLOAD_DIR: /app/data/uploads
+    ports:
+      - "8002:8001"
+    volumes:
+      - ./docker_data:/app/data
+      - ./docker_logs:/app/logs
+      - ./docker_vector:/app/vectorstore
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8001/health',timeout=3).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
