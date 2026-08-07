@@ -12,6 +12,8 @@ class EvalRunRequest(BaseModel):
     persist: bool = Field(True, description="是否落库为趋势快照")
     source: str = Field("api", description="来源标记：api | ci | schedule")
     note: str = Field("", max_length=255, description="备注，如本次改动说明")
+    kb_ids: Optional[List[str]] = Field(
+        None, description="限定评测的知识库范围；为空则评测当前租户全部 active KB")
 
 
 class EvalRunSummary(BaseModel):

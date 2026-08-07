@@ -1,0 +1,32 @@
+{
+  "kb_id": "695647c25ada4b85af3ac71b0bdf9948",
+  "n_queries": 16,
+  "aggregated": {
+    "delivered_recall@k": {
+      "1": 0.5,
+      "3": 0.6875,
+      "5": 0.6875
+    },
+    "delivered_ndcg@k": {
+      "1": 0.5,
+      "3": 0.625,
+      "5": 0.625
+    },
+    "delivered_mrr": 0.5938,
+    "retrieval_recall@k": {
+      "1": 0.875,
+      "3": 1.0,
+      "5": 1.0,
+      "10": 1.0,
+      "20": 1.0
+    },
+    "candidate_recall@10": 1.0,
+    "candidate_recall@20": 1.0,
+    "hit_rate": 0.6875,
+    "full_hit_rate": 0.6875,
+    "below_floor_rate": 0.3125,
+    "correct_rejection_rate": 0.0,
+    "n_negative": 0
+  },
+  "captured_at": "2026-08-07T08:48:24.856234+00:00"
+}

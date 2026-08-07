@@ -92,7 +92,7 @@ async def run_eval(request: Request, payload: Optional[EvalRunRequest] = None,
     tenant_id = get_tenant_id(request)
     payload = payload or EvalRunRequest()
     t0 = time.time()
-    result = await run_evaluation(db, tenant_id=tenant_id)
+    result = await run_evaluation(db, tenant_id=tenant_id, kb_ids=payload.kb_ids)
     duration_ms = int((time.time() - t0) * 1000)
 
     if payload.persist:
