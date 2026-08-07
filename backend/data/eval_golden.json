@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "description": "TerraForge 检索评测黄金集（default 租户，77 切片）。每条含用户查询与真实相关 chunk_id（ground truth）。覆盖规范查询/质量分析/案例检索/方案生成四类意图。",
+  "version": 2,
+  "description": "TerraForge 检索评测黄金集（default 租户，77 切片）。每条含用户查询与真实相关 chunk_id（ground truth）。覆盖规范查询/质量分析/案例检索/方案生成四类意图，并含越域负样本（negative）用于正确拒答率评估。",
   "tenant_id": "default",
   "items": [
     {
@@ -162,6 +162,120 @@
         "92826736eb0e4621b9aba975bd3bd14a"
       ],
       "note": "FAQ Q3 施工缝位置 + GB50204-2015 7.5.1 施工缝规定"
+    },
+    {
+      "id": "g19",
+      "query": "混凝土施工缝留设位置有哪些具体规定？",
+      "expected_intent": "spec_lookup",
+      "relevant_chunk_ids": [
+        "92826736eb0e4621b9aba975bd3bd14a",
+        "e8636e61af004626b7ef8d1eb1607906"
+      ],
+      "note": "GB50204-2015 7.5.1 施工缝规定 + FAQ Q3"
+    },
+    {
+      "id": "g20",
+      "query": "现浇结构出现严重外观质量缺陷应怎么处理？",
+      "expected_intent": "quality_diagnosis",
+      "relevant_chunk_ids": [
+        "95b2a06c4e064577bf57b56b4e6c9025",
+        "de31aa5ca84f491c9ec2d83e3571c142"
+      ],
+      "note": "GB50204-2015 8.1.1/8.1.2 外观质量缺陷处理与分级"
+    },
+    {
+      "id": "g21",
+      "query": "脚手架必须设置扫地杆吗？纵向扫地杆怎么固定？",
+      "expected_intent": "spec_lookup",
+      "relevant_chunk_ids": ["5e5820257c084f6b9d45905c67445f7a"],
+      "note": "JGJ130-2011 9.0.3 纵横向扫地杆（距底座上皮≤200mm）"
+    },
+    {
+      "id": "g22",
+      "query": "脚手架剪刀撑的跨越立杆数量和倾角有什么规定？",
+      "expected_intent": "spec_lookup",
+      "relevant_chunk_ids": ["771c2b57660d4e78904f5a7996e0acd9"],
+      "note": "JGJ130-2011 6.4.2 剪刀撑（跨越5~7根，倾角45°~60°）"
+    },
+    {
+      "id": "g23",
+      "query": "地下工程防水等级是如何划分的？一级和二级有什么区别？",
+      "expected_intent": "spec_lookup",
+      "relevant_chunk_ids": ["93206caa22c24c8999332cb8edf8eb61"],
+      "note": "GB50108-2008 3.2.1 防水等级四级划分"
+    },
+    {
+      "id": "g24",
+      "query": "防水混凝土的设计抗渗等级和工程埋置深度有什么关系？",
+      "expected_intent": "spec_lookup",
+      "relevant_chunk_ids": ["67802e5e574246cbaa1366fc332b6d63"],
+      "note": "GB50108-2008 4.1.4 抗渗等级随埋深确定（P6/P8/P10…）"
+    },
+    {
+      "id": "g25",
+      "query": "变形缝处混凝土结构厚度和允许沉降差有什么要求？",
+      "expected_intent": "spec_lookup",
+      "relevant_chunk_ids": ["4c99abf7df4b44c9a65f484ec6bb37ee"],
+      "note": "GB50108-2008 5.1.2 变形缝厚度≥300mm，沉降差≤30mm"
+    },
+    {
+      "id": "g26",
+      "query": "有没有深基坑支护变形超限的应急处置复盘案例？",
+      "expected_intent": "case_retrieval",
+      "relevant_chunk_ids": [
+        "f8217990c8894f6e8c984e73916e39ef",
+        "33f6666c65894897a95a56c21ec9da76"
+      ],
+      "note": "深基坑变形超限复盘（事件经过+处置效果）"
+    },
+    {
+      "id": "g27",
+      "query": "什么情况下必须编制危大工程专项施工方案？",
+      "expected_intent": "scheme_generation",
+      "relevant_chunk_ids": ["742f7d4b2fa54b3a9063a13d0a662c28"],
+      "note": "FAQ Q5 危大工程专项方案编制条件（37号令）"
+    },
+    {
+      "id": "g28",
+      "query": "工程质量问题如何分级？各级责任怎样划分？",
+      "expected_intent": "quality_diagnosis",
+      "relevant_chunk_ids": [
+        "721aa4cd4ca54b31bcaca5f7fb613c08",
+        "78c6deb538b54e859d80d2f46de7178e"
+      ],
+      "note": "质量问题处理办法（分级+责任划分）"
+    },
+    {
+      "id": "g29",
+      "query": "今天天气怎么样？适合出门吗？",
+      "expected_intent": "out_of_scope",
+      "negative": true,
+      "relevant_chunk_ids": [],
+      "note": "越域负样本：与工程无关，应被相关性门槛拦截（正确拒答）"
+    },
+    {
+      "id": "g30",
+      "query": "帮我写一首关于春天美景的七言绝句",
+      "expected_intent": "out_of_scope",
+      "negative": true,
+      "relevant_chunk_ids": [],
+      "note": "越域负样本：诗词创作，应被拦截"
+    },
+    {
+      "id": "g31",
+      "query": "Python 和 Java 哪种编程语言更适合初学者？",
+      "expected_intent": "out_of_scope",
+      "negative": true,
+      "relevant_chunk_ids": [],
+      "note": "越域负样本：编程语言比较，应被拦截"
+    },
+    {
+      "id": "g32",
+      "query": "明天A股大盘会涨还是跌？",
+      "expected_intent": "out_of_scope",
+      "negative": true,
+      "relevant_chunk_ids": [],
+      "note": "越域负样本：股市预测，应被拦截"
     }
   ]
 }

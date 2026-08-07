@@ -19,13 +19,16 @@ from sqlalchemy.orm import Session
 
 from app.core.logging import get_logger
 from app.core.metrics import evaluate_ranked, recall_at_k
-from app.models.knowledge import KnowledgeBase
+from app.models.knowledge import Chunk, Document, KnowledgeBase
 from app.rag import stages
 from app.rag.state import RAGState
+from app.schemas.knowledge import DocumentMeta, KnowledgeBaseCreate
+from app.services.knowledge_service import KnowledgeService
 
 logger = get_logger(__name__)
 
 GOLDEN_PATH = Path(__file__).resolve().parents[2] / "data" / "eval_golden.json"
+CORPUS_PATH = Path(__file__).resolve().parents[2] / "data" / "eval_corpus.json"
 DELIVERED_KS = [1, 3, 5]        # 重排后进入上下文的条数上限（RERANK_TOP_N=6）
 RETRIEVAL_KS = [1, 3, 5, 10, 20]  # 候选池诊断口径
 
@@ -52,8 +55,14 @@ def _resolve_scope(db: Session, tenant_id: str) -> List[str]:
 
 async def run_evaluation(db: Session, tenant_id: str = "default",
                           kb_ids: Optional[List[str]] = None,
-                          ks: List[int] = DELIVERED_KS) -> dict:
-    golden = load_golden()
+                          ks: List[int] = DELIVERED_KS,
+                          golden: Optional[dict] = None) -> dict:
+    """运行检索评测。
+
+    golden : 可传入自定义黄金集（如 CI 自包含语料生成的集合）。
+             为 None 时使用 data/eval_golden.json（生产黄金集）。
+    """
+    golden = golden or load_golden()
     if kb_ids is None:
         kb_ids = _resolve_scope(db, tenant_id)
 
@@ -87,6 +96,7 @@ async def run_evaluation(db: Session, tenant_id: str = "default",
             "intent": state.intent.value,
             "need_retrieval": state.need_retrieval,
             "below_floor": state.below_relevance_floor,
+            "negative": bool(item.get("negative", False)),
             "delivered_count": len(delivered),
             "candidate_count": len(candidates),
             "relevant_count": len(relevant),
@@ -99,22 +109,29 @@ async def run_evaluation(db: Session, tenant_id: str = "default",
         })
 
     # ---- 聚合（delivered 为主，retrieval 作诊断）----
+    # 负样本（越域/无关）单独统计"正确拒答率"，不污染正样本命中率
+    pos = [p for p in per_query if not p["negative"]]
+    neg = [p for p in per_query if p["negative"]]
+    n_pos = max(1, len(pos))
     n = max(1, len(per_query))
-    agg_recall = {k: round(sum(p["delivered_metrics"]["recall"][k] for p in per_query) / n, 4)
+
+    agg_recall = {k: round(sum(p["delivered_metrics"]["recall"][k] for p in pos) / n_pos, 4)
                   for k in ks}
-    agg_ndcg = {k: round(sum(p["delivered_metrics"]["ndcg"][k] for p in per_query) / n, 4)
+    agg_ndcg = {k: round(sum(p["delivered_metrics"]["ndcg"][k] for p in pos) / n_pos, 4)
                 for k in ks}
-    agg_mrr = round(sum(p["delivered_metrics"]["mrr"] for p in per_query) / n, 4)
-    agg_retrieval_recall = {k: round(sum(p["retrieval_metrics"]["recall"][k] for p in per_query) / n, 4)
+    agg_mrr = round(sum(p["delivered_metrics"]["mrr"] for p in pos) / n_pos, 4)
+    agg_retrieval_recall = {k: round(sum(p["retrieval_metrics"]["recall"][k] for p in pos) / n_pos, 4)
                             for k in RETRIEVAL_KS}
     agg_cand_recall = {
-        "10": round(sum(p["candidate_recall"]["10"] for p in per_query) / n, 4),
-        "20": round(sum(p["candidate_recall"]["20"] for p in per_query) / n, 4),
+        "10": round(sum(p["candidate_recall"]["10"] for p in pos) / n_pos, 4),
+        "20": round(sum(p["candidate_recall"]["20"] for p in pos) / n_pos, 4),
     }
-    # 命中率：至少命中 1 条相关 / 全部相关进前 N 的查询占比
-    hit_rate = round(sum(1 for p in per_query if p["hits_delivered"] > 0) / n, 4)
-    full_hit_rate = round(sum(1 for p in per_query if p["hits_delivered"] == p["relevant_count"]) / n, 4)
-    below_floor_rate = round(sum(1 for p in per_query if p["below_floor"]) / n, 4)
+    # 命中率：正样本中至少命中 1 条相关 / 全部相关进前 N 的查询占比
+    hit_rate = round(sum(1 for p in pos if p["hits_delivered"] > 0) / n_pos, 4)
+    full_hit_rate = round(sum(1 for p in pos if p["hits_delivered"] == p["relevant_count"]) / n_pos, 4)
+    below_floor_rate = round(sum(1 for p in pos if p["below_floor"]) / n_pos, 4)
+    # 正确拒答率：负样本应被相关性门槛拦截（无相关命中）
+    correct_rejection_rate = round(sum(1 for p in neg if p["hits_delivered"] == 0) / max(1, len(neg)), 4)
 
     aggregated = {
         "delivered_recall@k": agg_recall,
@@ -126,6 +143,8 @@ async def run_evaluation(db: Session, tenant_id: str = "default",
         "hit_rate": hit_rate,
         "full_hit_rate": full_hit_rate,
         "below_floor_rate": below_floor_rate,
+        "correct_rejection_rate": correct_rejection_rate,
+        "n_negative": len(neg),
     }
 
     return {
@@ -134,7 +153,60 @@ async def run_evaluation(db: Session, tenant_id: str = "default",
         "ks": ks,
         "retrieval_ks": RETRIEVAL_KS,
         "n_queries": len(per_query),
+        "n_positive": len(pos),
+        "n_negative": len(neg),
         "golden_version": golden.get("version"),
         "aggregated": aggregated,
         "per_query": per_query,
     }
+
+
+async def seed_eval_corpus(db: Session, tenant_id: str = "default",
+                            path: Path = CORPUS_PATH) -> dict:
+    """CI 自包含评测：把 data/eval_corpus.json 入库为一个临时 KB，
+    并以"每个文档的全部切片"作为该文档查询的 ground truth，返回黄金集。
+    返回的 dict 含 '_kb_id' 便于 run_evaluation 指定范围。
+    幂等：KB 已存在则复用，不再重复入库。"""
+    if not path.exists():
+        logger.warning("评测语料不存在: %s", path)
+        return {"version": 1, "tenant_id": tenant_id, "items": [], "_kb_id": None}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    ks = KnowledgeService(db)
+    kb_name = data.get("kb_name", "CI 评测规范库")
+    kb = db.query(KnowledgeBase).filter(
+        KnowledgeBase.name == kb_name, KnowledgeBase.tenant_id == tenant_id).first()
+    if not kb:
+        kb = ks.create_kb(
+            KnowledgeBaseCreate(name=kb_name, domain="standard",
+                                description="CI 自包含评测库（请勿手工修改）"),
+            tenant_id=tenant_id)
+        db.flush()
+
+    items: List[Dict] = []
+    for d in data.get("documents", []):
+        existing = db.query(Chunk).join(Document).filter(
+            Document.kb_id == kb.id, Document.title == d["title"],
+            Chunk.is_deleted.is_(False)).first()
+        if existing:
+            doc_id = existing.doc_id
+        else:
+            meta = DocumentMeta(
+                title=d.get("title"), standard_code=d.get("standard_code", ""),
+                standard_name=d.get("standard_name", ""))
+            doc = await ks.ingest_text(kb.id, d["title"], d["content"], meta)
+            doc_id = doc.id
+        chunk_ids = [c.id for c in db.query(Chunk).filter(
+            Chunk.doc_id == doc_id, Chunk.is_deleted.is_(False)).all()]
+        for qi, q in enumerate(d.get("queries", [])):
+            items.append({
+                "id": f"ci-{d['id']}-{qi + 1}",
+                "query": q,
+                "expected_intent": d.get("intent", "spec_lookup"),
+                "relevant_chunk_ids": chunk_ids,
+                "note": f"CI 自包含: {d.get('title')}",
+            })
+
+    logger.info("CI 评测语料就绪 | kb=%s | 文档=%d | 查询=%d",
+                kb.id, len(data.get("documents", [])), len(items))
+    return {"version": 1, "tenant_id": tenant_id, "items": items, "_kb_id": kb.id}
+

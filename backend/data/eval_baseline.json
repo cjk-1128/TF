@@ -1,6 +1,6 @@
 {
   "code": 0,
-  "message": "评测 18 题 | Recall@5=0.8889 MRR=0.963 命中率=1.0",
+  "message": "评测 32 题 | Recall@5=0.9107 MRR=0.9524 命中率=1.0",
   "data": {
     "tenant_id": "default",
     "kb_ids": [
@@ -21,32 +21,36 @@
       10,
       20
     ],
-    "n_queries": 18,
-    "golden_version": 1,
+    "n_queries": 32,
+    "n_positive": 28,
+    "n_negative": 4,
+    "golden_version": 2,
     "aggregated": {
       "delivered_recall@k": {
-        "1": 0.6667,
-        "3": 0.8333,
-        "5": 0.8889
+        "1": 0.6964,
+        "3": 0.8393,
+        "5": 0.9107
       },
       "delivered_ndcg@k": {
-        "1": 0.9444,
-        "3": 0.8534,
-        "5": 0.8791
+        "1": 0.9286,
+        "3": 0.8522,
+        "5": 0.8858
       },
-      "delivered_mrr": 0.963,
+      "delivered_mrr": 0.9524,
       "retrieval_recall@k": {
-        "1": 0.6481,
-        "3": 0.787,
-        "5": 0.9074,
-        "10": 0.963,
-        "20": 0.9815
+        "1": 0.6667,
+        "3": 0.8095,
+        "5": 0.9226,
+        "10": 0.9762,
+        "20": 0.9881
       },
-      "candidate_recall@10": 0.963,
-      "candidate_recall@20": 0.9815,
+      "candidate_recall@10": 0.9762,
+      "candidate_recall@20": 0.9881,
       "hit_rate": 1.0,
-      "full_hit_rate": 0.7778,
-      "below_floor_rate": 0.0
+      "full_hit_rate": 0.8214,
+      "below_floor_rate": 0.0,
+      "correct_rejection_rate": 1.0,
+      "n_negative": 4
     },
     "per_query": [
       {
@@ -56,6 +60,7 @@
         "intent": "spec_lookup",
         "need_retrieval": true,
         "below_floor": false,
+        "negative": false,
         "delivered_count": 6,
         "candidate_count": 15,
         "relevant_count": 3,
@@ -111,6 +116,7 @@
         "intent": "spec_lookup",
         "need_retrieval": true,
         "below_floor": false,
+        "negative": false,
         "delivered_count": 6,
         "candidate_count": 14,
         "relevant_count": 1,
@@ -166,6 +172,7 @@
         "intent": "spec_lookup",
         "need_retrieval": true,
         "below_floor": false,
+        "negative": false,
         "delivered_count": 6,
         "candidate_count": 14,
         "relevant_count": 1,
@@ -221,6 +228,7 @@
         "intent": "quality_diagnosis",
         "need_retrieval": true,
         "below_floor": false,
+        "negative": false,
         "delivered_count": 6,
         "candidate_count": 28,
         "relevant_count": 1,
@@ -276,6 +284,7 @@
         "intent": "spec_lookup",
         "need_retrieval": true,
         "below_floor": false,
+        "negative": false,
         "delivered_count": 6,
         "candidate_count": 14,
         "relevant_count": 1,
@@ -331,6 +340,7 @@
         "intent": "spec_lookup",
         "need_retrieval": true,
         "below_floor": false,
+        "negative": false,
         "delivered_count": 6,
         "candidate_count": 14,
         "relevant_count": 1,
@@ -386,6 +396,7 @@
         "intent": "unknown",
         "need_retrieval": true,
         "below_floor": false,
+        "negative": false,
         "delivered_count": 6,
         "candidate_count": 20,
         "relevant_count": 1,
@@ -441,6 +452,7 @@
         "intent": "unknown",
         "need_retrieval": true,
         "below_floor": false,
+        "negative": false,
         "delivered_count": 6,
         "candidate_count": 20,
         "relevant_count": 1,
@@ -496,6 +508,7 @@
         "intent": "quality_diagnosis",
         "need_retrieval": true,
         "below_floor": false,
+        "negative": false,
         "delivered_count": 6,
         "candidate_count": 28,
         "relevant_count": 3,
@@ -551,6 +564,7 @@
         "intent": "case_retrieval",
         "need_retrieval": true,
         "below_floor": false,
+        "negative": false,
         "delivered_count": 6,
         "candidate_count": 24,
         "relevant_count": 3,
@@ -606,6 +620,7 @@
         "intent": "quality_diagnosis",
         "need_retrieval": true,
         "below_floor": false,
+        "negative": false,
         "delivered_count": 6,
         "candidate_count": 28,
         "relevant_count": 3,
@@ -661,6 +676,7 @@
         "intent": "quality_diagnosis",
         "need_retrieval": true,
         "below_floor": false,
+        "negative": false,
         "delivered_count": 6,
         "candidate_count": 28,
         "relevant_count": 1,
@@ -716,6 +732,7 @@
         "intent": "unknown",
         "need_retrieval": true,
         "below_floor": false,
+        "negative": false,
         "delivered_count": 6,
         "candidate_count": 20,
         "relevant_count": 2,
@@ -771,6 +788,7 @@
         "intent": "case_retrieval",
         "need_retrieval": true,
         "below_floor": false,
+        "negative": false,
         "delivered_count": 6,
         "candidate_count": 24,
         "relevant_count": 3,
@@ -826,6 +844,7 @@
         "intent": "spec_lookup",
         "need_retrieval": true,
         "below_floor": false,
+        "negative": false,
         "delivered_count": 6,
         "candidate_count": 14,
         "relevant_count": 1,
@@ -881,6 +900,7 @@
         "intent": "scheme_generation",
         "need_retrieval": true,
         "below_floor": false,
+        "negative": false,
         "delivered_count": 6,
         "candidate_count": 22,
         "relevant_count": 3,
@@ -936,6 +956,7 @@
         "intent": "unknown",
         "need_retrieval": true,
         "below_floor": false,
+        "negative": false,
         "delivered_count": 6,
         "candidate_count": 20,
         "relevant_count": 3,
@@ -991,6 +1012,7 @@
         "intent": "unknown",
         "need_retrieval": true,
         "below_floor": false,
+        "negative": false,
         "delivered_count": 6,
         "candidate_count": 20,
         "relevant_count": 2,
@@ -1038,8 +1060,764 @@
           "4c99abf7df4b44c9a65f484ec6bb37ee",
           "d8d39d11c88b40d89ef39b7446366c13"
         ]
+      },
+      {
+        "id": "g19",
+        "query": "混凝土施工缝留设位置有哪些具体规定？",
+        "expected_intent": "spec_lookup",
+        "intent": "spec_lookup",
+        "need_retrieval": true,
+        "below_floor": false,
+        "negative": false,
+        "delivered_count": 6,
+        "candidate_count": 14,
+        "relevant_count": 2,
+        "hits_delivered": 1,
+        "hits_candidates": 2,
+        "delivered_metrics": {
+          "recall": {
+            "1": 0.5,
+            "3": 0.5,
+            "5": 0.5
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 0.6,
+            "5": 0.6
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 0.5,
+            "3": 0.5,
+            "5": 0.5,
+            "10": 1.0,
+            "20": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 0.6,
+            "5": 0.6,
+            "10": 0.7333,
+            "20": 0.7333
+          }
+        },
+        "candidate_recall": {
+          "10": 1.0,
+          "20": 1.0
+        },
+        "ranked_ids": [
+          "92826736eb0e4621b9aba975bd3bd14a",
+          "928ade6a53ad4761a1c952501d22c69e",
+          "eda1bd5a8155483cb6439492c0bc6901",
+          "2a18fc6b1bc446449db89e514b3cd238",
+          "d8d39d11c88b40d89ef39b7446366c13",
+          "08defedbc80f49de8ee5b7e6903ba570"
+        ]
+      },
+      {
+        "id": "g20",
+        "query": "现浇结构出现严重外观质量缺陷应怎么处理？",
+        "expected_intent": "quality_diagnosis",
+        "intent": "quality_diagnosis",
+        "need_retrieval": true,
+        "below_floor": false,
+        "negative": false,
+        "delivered_count": 6,
+        "candidate_count": 28,
+        "relevant_count": 2,
+        "hits_delivered": 2,
+        "hits_candidates": 2,
+        "delivered_metrics": {
+          "recall": {
+            "1": 0.5,
+            "3": 1.0,
+            "5": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 0.5,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          }
+        },
+        "candidate_recall": {
+          "10": 1.0,
+          "20": 1.0
+        },
+        "ranked_ids": [
+          "95b2a06c4e064577bf57b56b4e6c9025",
+          "de31aa5ca84f491c9ec2d83e3571c142",
+          "bd5df7f216a7402990692722da81d192",
+          "721aa4cd4ca54b31bcaca5f7fb613c08",
+          "92826736eb0e4621b9aba975bd3bd14a",
+          "33f6666c65894897a95a56c21ec9da76"
+        ]
+      },
+      {
+        "id": "g21",
+        "query": "脚手架必须设置扫地杆吗？纵向扫地杆怎么固定？",
+        "expected_intent": "spec_lookup",
+        "intent": "unknown",
+        "need_retrieval": true,
+        "below_floor": false,
+        "negative": false,
+        "delivered_count": 6,
+        "candidate_count": 24,
+        "relevant_count": 1,
+        "hits_delivered": 1,
+        "hits_candidates": 1,
+        "delivered_metrics": {
+          "recall": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          }
+        },
+        "candidate_recall": {
+          "10": 1.0,
+          "20": 1.0
+        },
+        "ranked_ids": [
+          "5e5820257c084f6b9d45905c67445f7a",
+          "14e9a73f51d74055b7af854ce0cccae2",
+          "6607957f81494050860d2b749bf8359d",
+          "58dc226eab924bcc9c4175984af8d75a",
+          "5f6026a394864803b037478df4e16610",
+          "9ca4f15eb23341a680420a61538ae7f7"
+        ]
+      },
+      {
+        "id": "g22",
+        "query": "脚手架剪刀撑的跨越立杆数量和倾角有什么规定？",
+        "expected_intent": "spec_lookup",
+        "intent": "spec_lookup",
+        "need_retrieval": true,
+        "below_floor": false,
+        "negative": false,
+        "delivered_count": 6,
+        "candidate_count": 14,
+        "relevant_count": 1,
+        "hits_delivered": 1,
+        "hits_candidates": 1,
+        "delivered_metrics": {
+          "recall": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          }
+        },
+        "candidate_recall": {
+          "10": 1.0,
+          "20": 1.0
+        },
+        "ranked_ids": [
+          "771c2b57660d4e78904f5a7996e0acd9",
+          "5e5820257c084f6b9d45905c67445f7a",
+          "58dc226eab924bcc9c4175984af8d75a",
+          "14e9a73f51d74055b7af854ce0cccae2",
+          "9ca4f15eb23341a680420a61538ae7f7",
+          "6607957f81494050860d2b749bf8359d"
+        ]
+      },
+      {
+        "id": "g23",
+        "query": "地下工程防水等级是如何划分的？一级和二级有什么区别？",
+        "expected_intent": "spec_lookup",
+        "intent": "unknown",
+        "need_retrieval": true,
+        "below_floor": false,
+        "negative": false,
+        "delivered_count": 6,
+        "candidate_count": 21,
+        "relevant_count": 1,
+        "hits_delivered": 1,
+        "hits_candidates": 1,
+        "delivered_metrics": {
+          "recall": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          }
+        },
+        "candidate_recall": {
+          "10": 1.0,
+          "20": 1.0
+        },
+        "ranked_ids": [
+          "93206caa22c24c8999332cb8edf8eb61",
+          "9878ff072a004deb92747b7352de0cf0",
+          "928ade6a53ad4761a1c952501d22c69e",
+          "db2bfd1682a64b63a9dfe3cc3d6540e0",
+          "67802e5e574246cbaa1366fc332b6d63",
+          "08defedbc80f49de8ee5b7e6903ba570"
+        ]
+      },
+      {
+        "id": "g24",
+        "query": "防水混凝土的设计抗渗等级和工程埋置深度有什么关系？",
+        "expected_intent": "spec_lookup",
+        "intent": "unknown",
+        "need_retrieval": true,
+        "below_floor": false,
+        "negative": false,
+        "delivered_count": 6,
+        "candidate_count": 20,
+        "relevant_count": 1,
+        "hits_delivered": 1,
+        "hits_candidates": 1,
+        "delivered_metrics": {
+          "recall": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          }
+        },
+        "candidate_recall": {
+          "10": 1.0,
+          "20": 1.0
+        },
+        "ranked_ids": [
+          "67802e5e574246cbaa1366fc332b6d63",
+          "92826736eb0e4621b9aba975bd3bd14a",
+          "928ade6a53ad4761a1c952501d22c69e",
+          "eda1bd5a8155483cb6439492c0bc6901",
+          "db2bfd1682a64b63a9dfe3cc3d6540e0",
+          "93206caa22c24c8999332cb8edf8eb61"
+        ]
+      },
+      {
+        "id": "g25",
+        "query": "变形缝处混凝土结构厚度和允许沉降差有什么要求？",
+        "expected_intent": "spec_lookup",
+        "intent": "quality_diagnosis",
+        "need_retrieval": true,
+        "below_floor": false,
+        "negative": false,
+        "delivered_count": 6,
+        "candidate_count": 28,
+        "relevant_count": 1,
+        "hits_delivered": 1,
+        "hits_candidates": 1,
+        "delivered_metrics": {
+          "recall": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          }
+        },
+        "candidate_recall": {
+          "10": 1.0,
+          "20": 1.0
+        },
+        "ranked_ids": [
+          "4c99abf7df4b44c9a65f484ec6bb37ee",
+          "db2bfd1682a64b63a9dfe3cc3d6540e0",
+          "ceaa4206f2bb47ceb891897fe98073a6",
+          "92826736eb0e4621b9aba975bd3bd14a",
+          "f1517c0cdcea42b79af8045c8eba1083",
+          "721aa4cd4ca54b31bcaca5f7fb613c08"
+        ]
+      },
+      {
+        "id": "g26",
+        "query": "有没有深基坑支护变形超限的应急处置复盘案例？",
+        "expected_intent": "case_retrieval",
+        "intent": "quality_diagnosis",
+        "need_retrieval": true,
+        "below_floor": false,
+        "negative": false,
+        "delivered_count": 6,
+        "candidate_count": 28,
+        "relevant_count": 2,
+        "hits_delivered": 2,
+        "hits_candidates": 2,
+        "delivered_metrics": {
+          "recall": {
+            "1": 0.5,
+            "3": 0.5,
+            "5": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 0.6,
+            "5": 0.84
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 0.0,
+            "3": 0.5,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          },
+          "mrr": 0.3333,
+          "ndcg": {
+            "1": 0.0,
+            "3": 0.3,
+            "5": 0.54,
+            "10": 0.54,
+            "20": 0.54
+          }
+        },
+        "candidate_recall": {
+          "10": 1.0,
+          "20": 1.0
+        },
+        "ranked_ids": [
+          "33f6666c65894897a95a56c21ec9da76",
+          "764f72fb4d2249b985eb0b504b5d3f42",
+          "b4b9b7abf2e24e239ed701a963cb58c4",
+          "f8217990c8894f6e8c984e73916e39ef",
+          "f83b5714bdb64b55bce1d7e174d99b06",
+          "ceaa4206f2bb47ceb891897fe98073a6"
+        ]
+      },
+      {
+        "id": "g27",
+        "query": "什么情况下必须编制危大工程专项施工方案？",
+        "expected_intent": "scheme_generation",
+        "intent": "scheme_generation",
+        "need_retrieval": true,
+        "below_floor": false,
+        "negative": false,
+        "delivered_count": 6,
+        "candidate_count": 22,
+        "relevant_count": 1,
+        "hits_delivered": 1,
+        "hits_candidates": 1,
+        "delivered_metrics": {
+          "recall": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          }
+        },
+        "candidate_recall": {
+          "10": 1.0,
+          "20": 1.0
+        },
+        "ranked_ids": [
+          "742f7d4b2fa54b3a9063a13d0a662c28",
+          "2e9a5562ff8949b6a1906a017a1b752d",
+          "721aa4cd4ca54b31bcaca5f7fb613c08",
+          "509198148cad49329e37be811e252f24",
+          "b4b3b4b72af84330a49b27efbf7def08",
+          "2a18fc6b1bc446449db89e514b3cd238"
+        ]
+      },
+      {
+        "id": "g28",
+        "query": "工程质量问题如何分级？各级责任怎样划分？",
+        "expected_intent": "quality_diagnosis",
+        "intent": "quality_diagnosis",
+        "need_retrieval": true,
+        "below_floor": false,
+        "negative": false,
+        "delivered_count": 6,
+        "candidate_count": 29,
+        "relevant_count": 2,
+        "hits_delivered": 2,
+        "hits_candidates": 2,
+        "delivered_metrics": {
+          "recall": {
+            "1": 0.0,
+            "3": 0.5,
+            "5": 1.0
+          },
+          "mrr": 0.3333,
+          "ndcg": {
+            "1": 0.0,
+            "3": 0.3,
+            "5": 0.54
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 0.0,
+            "3": 0.5,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          },
+          "mrr": 0.5,
+          "ndcg": {
+            "1": 0.0,
+            "3": 0.4,
+            "5": 0.64,
+            "10": 0.64,
+            "20": 0.64
+          }
+        },
+        "candidate_recall": {
+          "10": 1.0,
+          "20": 1.0
+        },
+        "ranked_ids": [
+          "6f799e81a7d548e1bc4b989c70b5a90d",
+          "929a6755cd3147ba8d8ba8ec84edf420",
+          "721aa4cd4ca54b31bcaca5f7fb613c08",
+          "78c6deb538b54e859d80d2f46de7178e",
+          "1e5c0764d16b4004bd908a7eb2ec0127",
+          "2e9a5562ff8949b6a1906a017a1b752d"
+        ]
+      },
+      {
+        "id": "g29",
+        "query": "今天天气怎么样？适合出门吗？",
+        "expected_intent": "out_of_scope",
+        "intent": "unknown",
+        "need_retrieval": true,
+        "below_floor": true,
+        "negative": true,
+        "delivered_count": 0,
+        "candidate_count": 20,
+        "relevant_count": 0,
+        "hits_delivered": 0,
+        "hits_candidates": 0,
+        "delivered_metrics": {
+          "recall": {
+            "1": 0.0,
+            "3": 0.0,
+            "5": 0.0
+          },
+          "mrr": 0.0,
+          "ndcg": {
+            "1": 0.0,
+            "3": 0.0,
+            "5": 0.0
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 0.0,
+            "3": 0.0,
+            "5": 0.0,
+            "10": 0.0,
+            "20": 0.0
+          },
+          "mrr": 0.0,
+          "ndcg": {
+            "1": 0.0,
+            "3": 0.0,
+            "5": 0.0,
+            "10": 0.0,
+            "20": 0.0
+          }
+        },
+        "candidate_recall": {
+          "10": 0.0,
+          "20": 0.0
+        },
+        "ranked_ids": []
+      },
+      {
+        "id": "g30",
+        "query": "帮我写一首关于春天美景的七言绝句",
+        "expected_intent": "out_of_scope",
+        "intent": "unknown",
+        "need_retrieval": true,
+        "below_floor": true,
+        "negative": true,
+        "delivered_count": 0,
+        "candidate_count": 20,
+        "relevant_count": 0,
+        "hits_delivered": 0,
+        "hits_candidates": 0,
+        "delivered_metrics": {
+          "recall": {
+            "1": 0.0,
+            "3": 0.0,
+            "5": 0.0
+          },
+          "mrr": 0.0,
+          "ndcg": {
+            "1": 0.0,
+            "3": 0.0,
+            "5": 0.0
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 0.0,
+            "3": 0.0,
+            "5": 0.0,
+            "10": 0.0,
+            "20": 0.0
+          },
+          "mrr": 0.0,
+          "ndcg": {
+            "1": 0.0,
+            "3": 0.0,
+            "5": 0.0,
+            "10": 0.0,
+            "20": 0.0
+          }
+        },
+        "candidate_recall": {
+          "10": 0.0,
+          "20": 0.0
+        },
+        "ranked_ids": []
+      },
+      {
+        "id": "g31",
+        "query": "Python 和 Java 哪种编程语言更适合初学者？",
+        "expected_intent": "out_of_scope",
+        "intent": "unknown",
+        "need_retrieval": true,
+        "below_floor": true,
+        "negative": true,
+        "delivered_count": 0,
+        "candidate_count": 20,
+        "relevant_count": 0,
+        "hits_delivered": 0,
+        "hits_candidates": 0,
+        "delivered_metrics": {
+          "recall": {
+            "1": 0.0,
+            "3": 0.0,
+            "5": 0.0
+          },
+          "mrr": 0.0,
+          "ndcg": {
+            "1": 0.0,
+            "3": 0.0,
+            "5": 0.0
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 0.0,
+            "3": 0.0,
+            "5": 0.0,
+            "10": 0.0,
+            "20": 0.0
+          },
+          "mrr": 0.0,
+          "ndcg": {
+            "1": 0.0,
+            "3": 0.0,
+            "5": 0.0,
+            "10": 0.0,
+            "20": 0.0
+          }
+        },
+        "candidate_recall": {
+          "10": 0.0,
+          "20": 0.0
+        },
+        "ranked_ids": []
+      },
+      {
+        "id": "g32",
+        "query": "明天A股大盘会涨还是跌？",
+        "expected_intent": "out_of_scope",
+        "intent": "unknown",
+        "need_retrieval": true,
+        "below_floor": true,
+        "negative": true,
+        "delivered_count": 0,
+        "candidate_count": 20,
+        "relevant_count": 0,
+        "hits_delivered": 0,
+        "hits_candidates": 0,
+        "delivered_metrics": {
+          "recall": {
+            "1": 0.0,
+            "3": 0.0,
+            "5": 0.0
+          },
+          "mrr": 0.0,
+          "ndcg": {
+            "1": 0.0,
+            "3": 0.0,
+            "5": 0.0
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 0.0,
+            "3": 0.0,
+            "5": 0.0,
+            "10": 0.0,
+            "20": 0.0
+          },
+          "mrr": 0.0,
+          "ndcg": {
+            "1": 0.0,
+            "3": 0.0,
+            "5": 0.0,
+            "10": 0.0,
+            "20": 0.0
+          }
+        },
+        "candidate_recall": {
+          "10": 0.0,
+          "20": 0.0
+        },
+        "ranked_ids": []
       }
     ]
   },
-  "trace_id": "01293c2c81b9"
+  "trace_id": "fff3409fce1b"
 }
