@@ -1,0 +1,1045 @@
+{
+  "code": 0,
+  "message": "评测 18 题 | Recall@5=0.8889 MRR=0.963 命中率=1.0",
+  "data": {
+    "tenant_id": "default",
+    "kb_ids": [
+      "e2b84dd4a57f40a9a0a3caef616b13f3",
+      "adaf2fb676bf4c94b8921e2cb8ba07de",
+      "1219df55ae234f5fa356ecf5671f894a",
+      "a9b50d0fb582428fb3f9403ec215ac2a"
+    ],
+    "ks": [
+      1,
+      3,
+      5
+    ],
+    "retrieval_ks": [
+      1,
+      3,
+      5,
+      10,
+      20
+    ],
+    "n_queries": 18,
+    "golden_version": 1,
+    "aggregated": {
+      "delivered_recall@k": {
+        "1": 0.6667,
+        "3": 0.8333,
+        "5": 0.8889
+      },
+      "delivered_ndcg@k": {
+        "1": 0.9444,
+        "3": 0.8534,
+        "5": 0.8791
+      },
+      "delivered_mrr": 0.963,
+      "retrieval_recall@k": {
+        "1": 0.6481,
+        "3": 0.787,
+        "5": 0.9074,
+        "10": 0.963,
+        "20": 0.9815
+      },
+      "candidate_recall@10": 0.963,
+      "candidate_recall@20": 0.9815,
+      "hit_rate": 1.0,
+      "full_hit_rate": 0.7778,
+      "below_floor_rate": 0.0
+    },
+    "per_query": [
+      {
+        "id": "g01",
+        "query": "混凝土浇筑完毕后应在什么时候开始养护？浇水养护有什么要求？",
+        "expected_intent": "spec_lookup",
+        "intent": "spec_lookup",
+        "need_retrieval": true,
+        "below_floor": false,
+        "delivered_count": 6,
+        "candidate_count": 15,
+        "relevant_count": 3,
+        "hits_delivered": 2,
+        "hits_candidates": 2,
+        "delivered_metrics": {
+          "recall": {
+            "1": 0.3333,
+            "3": 0.6667,
+            "5": 0.6667
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 0.7692,
+            "5": 0.7692
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 0.3333,
+            "3": 0.6667,
+            "5": 0.6667,
+            "10": 0.6667,
+            "20": 0.6667
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 0.7692,
+            "5": 0.7692,
+            "10": 0.7692,
+            "20": 0.7692
+          }
+        },
+        "candidate_recall": {
+          "10": 0.6667,
+          "20": 0.6667
+        },
+        "ranked_ids": [
+          "eda1bd5a8155483cb6439492c0bc6901",
+          "fd5700823d79467c9d5c72b673c41867",
+          "a1c24947b112466e988b531a97839225",
+          "2e9a5562ff8949b6a1906a017a1b752d",
+          "92826736eb0e4621b9aba975bd3bd14a",
+          "fae8817e7aef437d8a949aa932eacc77"
+        ]
+      },
+      {
+        "id": "g02",
+        "query": "灌注桩施工对沉渣厚度有什么要求？",
+        "expected_intent": "spec_lookup",
+        "intent": "spec_lookup",
+        "need_retrieval": true,
+        "below_floor": false,
+        "delivered_count": 6,
+        "candidate_count": 14,
+        "relevant_count": 1,
+        "hits_delivered": 1,
+        "hits_candidates": 1,
+        "delivered_metrics": {
+          "recall": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          }
+        },
+        "candidate_recall": {
+          "10": 1.0,
+          "20": 1.0
+        },
+        "ranked_ids": [
+          "2a30bf716e6d486f9c4e373decbc4232",
+          "6f8fb214a05042a6bde6395a2f905ddc",
+          "7f9ba6a26ba14a82b39d1397c0b25978",
+          "6ee7f52f16a14a06b76bd5a03dd623ef",
+          "3a9018839bfa4448aae6ed7d86599734",
+          "f1f584d07ee44b79bcab13c9c93e67c1"
+        ]
+      },
+      {
+        "id": "g03",
+        "query": "脚手架立杆必须用连墙件与建筑物连接，具体要求是什么？",
+        "expected_intent": "spec_lookup",
+        "intent": "spec_lookup",
+        "need_retrieval": true,
+        "below_floor": false,
+        "delivered_count": 6,
+        "candidate_count": 14,
+        "relevant_count": 1,
+        "hits_delivered": 1,
+        "hits_candidates": 1,
+        "delivered_metrics": {
+          "recall": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          }
+        },
+        "candidate_recall": {
+          "10": 1.0,
+          "20": 1.0
+        },
+        "ranked_ids": [
+          "5f6026a394864803b037478df4e16610",
+          "5e5820257c084f6b9d45905c67445f7a",
+          "14e9a73f51d74055b7af854ce0cccae2",
+          "9ca4f15eb23341a680420a61538ae7f7",
+          "58dc226eab924bcc9c4175984af8d75a",
+          "6607957f81494050860d2b749bf8359d"
+        ]
+      },
+      {
+        "id": "g04",
+        "query": "地下防水混凝土结构的裂缝宽度允许达到多少？",
+        "expected_intent": "spec_lookup",
+        "intent": "quality_diagnosis",
+        "need_retrieval": true,
+        "below_floor": false,
+        "delivered_count": 6,
+        "candidate_count": 28,
+        "relevant_count": 1,
+        "hits_delivered": 1,
+        "hits_candidates": 1,
+        "delivered_metrics": {
+          "recall": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          }
+        },
+        "candidate_recall": {
+          "10": 1.0,
+          "20": 1.0
+        },
+        "ranked_ids": [
+          "db2bfd1682a64b63a9dfe3cc3d6540e0",
+          "928ade6a53ad4761a1c952501d22c69e",
+          "93206caa22c24c8999332cb8edf8eb61",
+          "92826736eb0e4621b9aba975bd3bd14a",
+          "4c99abf7df4b44c9a65f484ec6bb37ee",
+          "1406c4bb188d4004a9b02b0b8b58bb8a"
+        ]
+      },
+      {
+        "id": "g05",
+        "query": "一级基坑支护结构顶部水平位移监测报警值是多少？",
+        "expected_intent": "spec_lookup",
+        "intent": "spec_lookup",
+        "need_retrieval": true,
+        "below_floor": false,
+        "delivered_count": 6,
+        "candidate_count": 14,
+        "relevant_count": 1,
+        "hits_delivered": 1,
+        "hits_candidates": 1,
+        "delivered_metrics": {
+          "recall": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          }
+        },
+        "candidate_recall": {
+          "10": 1.0,
+          "20": 1.0
+        },
+        "ranked_ids": [
+          "1ce71ba8e80b48df8d12136ff94f4351",
+          "ceaa4206f2bb47ceb891897fe98073a6",
+          "f8217990c8894f6e8c984e73916e39ef",
+          "33f6666c65894897a95a56c21ec9da76",
+          "f83b5714bdb64b55bce1d7e174d99b06",
+          "742f7d4b2fa54b3a9063a13d0a662c28"
+        ]
+      },
+      {
+        "id": "g06",
+        "query": "防水混凝土迎水面钢筋保护层厚度不应小于多少？",
+        "expected_intent": "spec_lookup",
+        "intent": "spec_lookup",
+        "need_retrieval": true,
+        "below_floor": false,
+        "delivered_count": 6,
+        "candidate_count": 14,
+        "relevant_count": 1,
+        "hits_delivered": 1,
+        "hits_candidates": 1,
+        "delivered_metrics": {
+          "recall": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          }
+        },
+        "candidate_recall": {
+          "10": 1.0,
+          "20": 1.0
+        },
+        "ranked_ids": [
+          "928ade6a53ad4761a1c952501d22c69e",
+          "db2bfd1682a64b63a9dfe3cc3d6540e0",
+          "1a88e000a7b442b4b72eca08f5b6a4a6",
+          "92826736eb0e4621b9aba975bd3bd14a",
+          "67802e5e574246cbaa1366fc332b6d63",
+          "4c99abf7df4b44c9a65f484ec6bb37ee"
+        ]
+      },
+      {
+        "id": "g07",
+        "query": "基坑开挖应遵循什么原则？",
+        "expected_intent": "spec_lookup",
+        "intent": "unknown",
+        "need_retrieval": true,
+        "below_floor": false,
+        "delivered_count": 6,
+        "candidate_count": 20,
+        "relevant_count": 1,
+        "hits_delivered": 1,
+        "hits_candidates": 1,
+        "delivered_metrics": {
+          "recall": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          }
+        },
+        "candidate_recall": {
+          "10": 1.0,
+          "20": 1.0
+        },
+        "ranked_ids": [
+          "ceaa4206f2bb47ceb891897fe98073a6",
+          "33f6666c65894897a95a56c21ec9da76",
+          "2a18fc6b1bc446449db89e514b3cd238",
+          "764f72fb4d2249b985eb0b504b5d3f42",
+          "f8217990c8894f6e8c984e73916e39ef",
+          "f83b5714bdb64b55bce1d7e174d99b06"
+        ]
+      },
+      {
+        "id": "g08",
+        "query": "混凝土同条件养护试块应如何留置？",
+        "expected_intent": "spec_lookup",
+        "intent": "unknown",
+        "need_retrieval": true,
+        "below_floor": false,
+        "delivered_count": 6,
+        "candidate_count": 20,
+        "relevant_count": 1,
+        "hits_delivered": 1,
+        "hits_candidates": 1,
+        "delivered_metrics": {
+          "recall": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          }
+        },
+        "candidate_recall": {
+          "10": 1.0,
+          "20": 1.0
+        },
+        "ranked_ids": [
+          "5d6c2931228b480e8ccc25420802844b",
+          "a1c24947b112466e988b531a97839225",
+          "2e9a5562ff8949b6a1906a017a1b752d",
+          "eda1bd5a8155483cb6439492c0bc6901",
+          "fd5700823d79467c9d5c72b673c41867",
+          "92826736eb0e4621b9aba975bd3bd14a"
+        ]
+      },
+      {
+        "id": "g09",
+        "query": "地下室顶板出现宽度 0.3mm 的表面裂缝，应该怎么处理？",
+        "expected_intent": "quality_diagnosis",
+        "intent": "quality_diagnosis",
+        "need_retrieval": true,
+        "below_floor": false,
+        "delivered_count": 6,
+        "candidate_count": 28,
+        "relevant_count": 3,
+        "hits_delivered": 2,
+        "hits_candidates": 3,
+        "delivered_metrics": {
+          "recall": {
+            "1": 0.3333,
+            "3": 0.6667,
+            "5": 0.6667
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 0.6923,
+            "5": 0.6923
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 0.3333,
+            "3": 0.6667,
+            "5": 0.6667,
+            "10": 1.0,
+            "20": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 0.6923,
+            "5": 0.6923,
+            "10": 0.7762,
+            "20": 0.7762
+          }
+        },
+        "candidate_recall": {
+          "10": 1.0,
+          "20": 1.0
+        },
+        "ranked_ids": [
+          "f1f584d07ee44b79bcab13c9c93e67c1",
+          "1f9606d492a742edab897f610d8fcb58",
+          "01a14694699249079c2b0f91b35fa844",
+          "76f3dc5a8ca34e3a8aaea0d6a12a10ab",
+          "b220f4a3a15f4fa5902cab08a0a49e64",
+          "649985ce90924714b23a0f26d82924c6"
+        ]
+      },
+      {
+        "id": "g10",
+        "query": "地下室外墙发生渗漏水，如何治理并有哪些教训？",
+        "expected_intent": "quality_diagnosis",
+        "intent": "case_retrieval",
+        "need_retrieval": true,
+        "below_floor": false,
+        "delivered_count": 6,
+        "candidate_count": 24,
+        "relevant_count": 3,
+        "hits_delivered": 2,
+        "hits_candidates": 3,
+        "delivered_metrics": {
+          "recall": {
+            "1": 0.3333,
+            "3": 0.3333,
+            "5": 0.3333
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 0.4615,
+            "5": 0.4615
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 0.3333,
+            "3": 0.3333,
+            "5": 0.6667,
+            "10": 1.0,
+            "20": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 0.4615,
+            "5": 0.6462,
+            "10": 0.7615,
+            "20": 0.7615
+          }
+        },
+        "candidate_recall": {
+          "10": 1.0,
+          "20": 1.0
+        },
+        "ranked_ids": [
+          "509198148cad49329e37be811e252f24",
+          "a4832474be124e27a98cf3921c2b4069",
+          "93206caa22c24c8999332cb8edf8eb61",
+          "2e9a5562ff8949b6a1906a017a1b752d",
+          "2a18fc6b1bc446449db89e514b3cd238",
+          "db2bfd1682a64b63a9dfe3cc3d6540e0"
+        ]
+      },
+      {
+        "id": "g11",
+        "query": "深基坑支护变形超过一级基坑报警值，应如何应急处置？",
+        "expected_intent": "quality_diagnosis",
+        "intent": "quality_diagnosis",
+        "need_retrieval": true,
+        "below_floor": false,
+        "delivered_count": 6,
+        "candidate_count": 28,
+        "relevant_count": 3,
+        "hits_delivered": 3,
+        "hits_candidates": 3,
+        "delivered_metrics": {
+          "recall": {
+            "1": 0.3333,
+            "3": 0.6667,
+            "5": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 0.7692,
+            "5": 0.9231
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 0.0,
+            "3": 0.6667,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          },
+          "mrr": 0.5,
+          "ndcg": {
+            "1": 0.0,
+            "3": 0.5385,
+            "5": 0.6923,
+            "10": 0.6923,
+            "20": 0.6923
+          }
+        },
+        "candidate_recall": {
+          "10": 1.0,
+          "20": 1.0
+        },
+        "ranked_ids": [
+          "33f6666c65894897a95a56c21ec9da76",
+          "f8217990c8894f6e8c984e73916e39ef",
+          "764f72fb4d2249b985eb0b504b5d3f42",
+          "b4b9b7abf2e24e239ed701a963cb58c4",
+          "1ce71ba8e80b48df8d12136ff94f4351",
+          "ceaa4206f2bb47ceb891897fe98073a6"
+        ]
+      },
+      {
+        "id": "g12",
+        "query": "混凝土试块强度不合格怎么办？",
+        "expected_intent": "quality_diagnosis",
+        "intent": "quality_diagnosis",
+        "need_retrieval": true,
+        "below_floor": false,
+        "delivered_count": 6,
+        "candidate_count": 28,
+        "relevant_count": 1,
+        "hits_delivered": 1,
+        "hits_candidates": 1,
+        "delivered_metrics": {
+          "recall": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          }
+        },
+        "candidate_recall": {
+          "10": 1.0,
+          "20": 1.0
+        },
+        "ranked_ids": [
+          "e031d545dab644699db9a04132dfac07",
+          "f5d6c7f9dac6484eaf4cf582d5acccb1",
+          "2e9a5562ff8949b6a1906a017a1b752d",
+          "5d6c2931228b480e8ccc25420802844b",
+          "a1c24947b112466e988b531a97839225",
+          "92826736eb0e4621b9aba975bd3bd14a"
+        ]
+      },
+      {
+        "id": "g13",
+        "query": "钢筋保护层厚度超标如何处理？",
+        "expected_intent": "quality_diagnosis",
+        "intent": "unknown",
+        "need_retrieval": true,
+        "below_floor": false,
+        "delivered_count": 6,
+        "candidate_count": 20,
+        "relevant_count": 2,
+        "hits_delivered": 2,
+        "hits_candidates": 2,
+        "delivered_metrics": {
+          "recall": {
+            "1": 0.5,
+            "3": 1.0,
+            "5": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 0.5,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          }
+        },
+        "candidate_recall": {
+          "10": 1.0,
+          "20": 1.0
+        },
+        "ranked_ids": [
+          "1a88e000a7b442b4b72eca08f5b6a4a6",
+          "928ade6a53ad4761a1c952501d22c69e",
+          "de31aa5ca84f491c9ec2d83e3571c142",
+          "d8d39d11c88b40d89ef39b7446366c13",
+          "1f9606d492a742edab897f610d8fcb58",
+          "509198148cad49329e37be811e252f24"
+        ]
+      },
+      {
+        "id": "g14",
+        "query": "有没有地下室顶板裂缝的事故案例及处置经验？",
+        "expected_intent": "case_retrieval",
+        "intent": "case_retrieval",
+        "need_retrieval": true,
+        "below_floor": false,
+        "delivered_count": 6,
+        "candidate_count": 24,
+        "relevant_count": 3,
+        "hits_delivered": 3,
+        "hits_candidates": 3,
+        "delivered_metrics": {
+          "recall": {
+            "1": 0.0,
+            "3": 0.3333,
+            "5": 0.6667
+          },
+          "mrr": 0.3333,
+          "ndcg": {
+            "1": 0.0,
+            "3": 0.2308,
+            "5": 0.3846
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 0.0,
+            "3": 0.0,
+            "5": 0.6667,
+            "10": 1.0,
+            "20": 1.0
+          },
+          "mrr": 0.25,
+          "ndcg": {
+            "1": 0.0,
+            "3": 0.0,
+            "5": 0.3385,
+            "10": 0.4703,
+            "20": 0.4703
+          }
+        },
+        "candidate_recall": {
+          "10": 1.0,
+          "20": 1.0
+        },
+        "ranked_ids": [
+          "76f3dc5a8ca34e3a8aaea0d6a12a10ab",
+          "b220f4a3a15f4fa5902cab08a0a49e64",
+          "f1f584d07ee44b79bcab13c9c93e67c1",
+          "99d9b204ead64551bba3df106844120b",
+          "2e9a5562ff8949b6a1906a017a1b752d",
+          "01a14694699249079c2b0f91b35fa844"
+        ]
+      },
+      {
+        "id": "g15",
+        "query": "脚手架搭设人员需要满足什么资质要求？",
+        "expected_intent": "spec_lookup",
+        "intent": "spec_lookup",
+        "need_retrieval": true,
+        "below_floor": false,
+        "delivered_count": 6,
+        "candidate_count": 14,
+        "relevant_count": 1,
+        "hits_delivered": 1,
+        "hits_candidates": 1,
+        "delivered_metrics": {
+          "recall": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 1.0,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          }
+        },
+        "candidate_recall": {
+          "10": 1.0,
+          "20": 1.0
+        },
+        "ranked_ids": [
+          "14e9a73f51d74055b7af854ce0cccae2",
+          "17d4e8032c344f08ba3823923c6438e3",
+          "9ca4f15eb23341a680420a61538ae7f7",
+          "90e7188cff554229a48c77322bfe7753",
+          "58dc226eab924bcc9c4175984af8d75a",
+          "3a9018839bfa4448aae6ed7d86599734"
+        ]
+      },
+      {
+        "id": "g16",
+        "query": "混凝土浇筑作业的标准流程和关键控制要点有哪些？",
+        "expected_intent": "scheme_generation",
+        "intent": "scheme_generation",
+        "need_retrieval": true,
+        "below_floor": false,
+        "delivered_count": 6,
+        "candidate_count": 22,
+        "relevant_count": 3,
+        "hits_delivered": 3,
+        "hits_candidates": 3,
+        "delivered_metrics": {
+          "recall": {
+            "1": 0.3333,
+            "3": 0.6667,
+            "5": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 0.7692,
+            "5": 0.9231
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 0.3333,
+            "3": 0.6667,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 0.6923,
+            "5": 0.8462,
+            "10": 0.8462,
+            "20": 0.8462
+          }
+        },
+        "candidate_recall": {
+          "10": 1.0,
+          "20": 1.0
+        },
+        "ranked_ids": [
+          "a1c24947b112466e988b531a97839225",
+          "f5d6c7f9dac6484eaf4cf582d5acccb1",
+          "979d7fa1b80043669aaa845be1db0fe0",
+          "fae8817e7aef437d8a949aa932eacc77",
+          "d8d39d11c88b40d89ef39b7446366c13",
+          "eda1bd5a8155483cb6439492c0bc6901"
+        ]
+      },
+      {
+        "id": "g17",
+        "query": "雨季和夏季高温期间混凝土施工要注意什么？",
+        "expected_intent": "scheme_generation",
+        "intent": "unknown",
+        "need_retrieval": true,
+        "below_floor": false,
+        "delivered_count": 6,
+        "candidate_count": 20,
+        "relevant_count": 3,
+        "hits_delivered": 2,
+        "hits_candidates": 3,
+        "delivered_metrics": {
+          "recall": {
+            "1": 0.3333,
+            "3": 0.6667,
+            "5": 0.6667
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 0.7692,
+            "5": 0.7692
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 0.3333,
+            "3": 0.6667,
+            "5": 0.6667,
+            "10": 0.6667,
+            "20": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 0.6923,
+            "5": 0.6923,
+            "10": 0.6923,
+            "20": 0.7538
+          }
+        },
+        "candidate_recall": {
+          "10": 0.6667,
+          "20": 1.0
+        },
+        "ranked_ids": [
+          "2a18fc6b1bc446449db89e514b3cd238",
+          "fae8817e7aef437d8a949aa932eacc77",
+          "92826736eb0e4621b9aba975bd3bd14a",
+          "a1c24947b112466e988b531a97839225",
+          "7f9ba6a26ba14a82b39d1397c0b25978",
+          "eda1bd5a8155483cb6439492c0bc6901"
+        ]
+      },
+      {
+        "id": "g18",
+        "query": "施工缝应留在结构的什么位置？",
+        "expected_intent": "spec_lookup",
+        "intent": "unknown",
+        "need_retrieval": true,
+        "below_floor": false,
+        "delivered_count": 6,
+        "candidate_count": 20,
+        "relevant_count": 2,
+        "hits_delivered": 2,
+        "hits_candidates": 2,
+        "delivered_metrics": {
+          "recall": {
+            "1": 0.5,
+            "3": 1.0,
+            "5": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 0.9,
+            "5": 0.9
+          }
+        },
+        "retrieval_metrics": {
+          "recall": {
+            "1": 0.5,
+            "3": 0.5,
+            "5": 1.0,
+            "10": 1.0,
+            "20": 1.0
+          },
+          "mrr": 1.0,
+          "ndcg": {
+            "1": 1.0,
+            "3": 0.6,
+            "5": 0.84,
+            "10": 0.84,
+            "20": 0.84
+          }
+        },
+        "candidate_recall": {
+          "10": 1.0,
+          "20": 1.0
+        },
+        "ranked_ids": [
+          "e8636e61af004626b7ef8d1eb1607906",
+          "928ade6a53ad4761a1c952501d22c69e",
+          "92826736eb0e4621b9aba975bd3bd14a",
+          "e90d1fb810dc48ca9f278cf40362c519",
+          "4c99abf7df4b44c9a65f484ec6bb37ee",
+          "d8d39d11c88b40d89ef39b7446366c13"
+        ]
+      }
+    ]
+  },
+  "trace_id": "01293c2c81b9"
+}

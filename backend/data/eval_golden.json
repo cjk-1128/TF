@@ -1,0 +1,167 @@
+{
+  "version": 1,
+  "description": "TerraForge 检索评测黄金集（default 租户，77 切片）。每条含用户查询与真实相关 chunk_id（ground truth）。覆盖规范查询/质量分析/案例检索/方案生成四类意图。",
+  "tenant_id": "default",
+  "items": [
+    {
+      "id": "g01",
+      "query": "混凝土浇筑完毕后应在什么时候开始养护？浇水养护有什么要求？",
+      "expected_intent": "spec_lookup",
+      "relevant_chunk_ids": [
+        "eda1bd5a8155483cb6439492c0bc6901",
+        "fd5700823d79467c9d5c72b673c41867",
+        "1406c4bb188d4004a9b02b0b8b58bb8a"
+      ],
+      "note": "GB50204-2015 7.4 混凝土养护（开始时间/浇水养护/1.2MPa前禁踩踏）"
+    },
+    {
+      "id": "g02",
+      "query": "灌注桩施工对沉渣厚度有什么要求？",
+      "expected_intent": "spec_lookup",
+      "relevant_chunk_ids": ["2a30bf716e6d486f9c4e373decbc4232"],
+      "note": "GB50202-2018 5.1.1 沉渣厚度（端承≤50mm/摩擦≤100mm）"
+    },
+    {
+      "id": "g03",
+      "query": "脚手架立杆必须用连墙件与建筑物连接，具体要求是什么？",
+      "expected_intent": "spec_lookup",
+      "relevant_chunk_ids": ["5f6026a394864803b037478df4e16610"],
+      "note": "JGJ130-2011 6.3.1 立杆连墙件（靠近主节点≤300mm）"
+    },
+    {
+      "id": "g04",
+      "query": "地下防水混凝土结构的裂缝宽度允许达到多少？",
+      "expected_intent": "spec_lookup",
+      "relevant_chunk_ids": ["db2bfd1682a64b63a9dfe3cc3d6540e0"],
+      "note": "GB50108-2008 4.1.7 防水混凝土裂缝宽度≤0.2mm"
+    },
+    {
+      "id": "g05",
+      "query": "一级基坑支护结构顶部水平位移监测报警值是多少？",
+      "expected_intent": "spec_lookup",
+      "relevant_chunk_ids": ["1ce71ba8e80b48df8d12136ff94f4351"],
+      "note": "GB50202-2018 7.1.4 一级基坑位移报警30mm/速率3mm/d"
+    },
+    {
+      "id": "g06",
+      "query": "防水混凝土迎水面钢筋保护层厚度不应小于多少？",
+      "expected_intent": "spec_lookup",
+      "relevant_chunk_ids": ["928ade6a53ad4761a1c952501d22c69e"],
+      "note": "GB50108-2008 4.1.8 迎水面保护层≥50mm"
+    },
+    {
+      "id": "g07",
+      "query": "基坑开挖应遵循什么原则？",
+      "expected_intent": "spec_lookup",
+      "relevant_chunk_ids": ["ceaa4206f2bb47ceb891897fe98073a6"],
+      "note": "GB50202-2018 7.1.2 分层分段、开槽支撑、先撑后挖、严禁超挖"
+    },
+    {
+      "id": "g08",
+      "query": "混凝土同条件养护试块应如何留置？",
+      "expected_intent": "spec_lookup",
+      "relevant_chunk_ids": ["5d6c2931228b480e8ccc25420802844b"],
+      "note": "FAQ Q6 同条件试块留置（≥10组且≥3组，等效养护）"
+    },
+    {
+      "id": "g09",
+      "query": "地下室顶板出现宽度 0.3mm 的表面裂缝，应该怎么处理？",
+      "expected_intent": "quality_diagnosis",
+      "relevant_chunk_ids": [
+        "f1f584d07ee44b79bcab13c9c93e67c1",
+        "01a14694699249079c2b0f91b35fa844",
+        "2e9a5562ff8949b6a1906a017a1b752d"
+      ],
+      "note": "顶板裂缝事故：处置措施（0.2~0.3mm环氧树脂）+问题描述+经验教训"
+    },
+    {
+      "id": "g10",
+      "query": "地下室外墙发生渗漏水，如何治理并有哪些教训？",
+      "expected_intent": "quality_diagnosis",
+      "relevant_chunk_ids": [
+        "1f9606d492a742edab897f610d8fcb58",
+        "509198148cad49329e37be811e252f24",
+        "db2bfd1682a64b63a9dfe3cc3d6540e0"
+      ],
+      "note": "外墙渗漏案例（渗漏情况+教训）+防水混凝土裂缝宽度支撑"
+    },
+    {
+      "id": "g11",
+      "query": "深基坑支护变形超过一级基坑报警值，应如何应急处置？",
+      "expected_intent": "quality_diagnosis",
+      "relevant_chunk_ids": [
+        "f8217990c8894f6e8c984e73916e39ef",
+        "33f6666c65894897a95a56c21ec9da76",
+        "1ce71ba8e80b48df8d12136ff94f4351"
+      ],
+      "note": "深基坑变形复盘（事件经过报警+处置效果）+一级基坑报警值"
+    },
+    {
+      "id": "g12",
+      "query": "混凝土试块强度不合格怎么办？",
+      "expected_intent": "quality_diagnosis",
+      "relevant_chunk_ids": ["e031d545dab644699db9a04132dfac07"],
+      "note": "FAQ Q1 试块不合格处置（复核→实体检测）"
+    },
+    {
+      "id": "g13",
+      "query": "钢筋保护层厚度超标如何处理？",
+      "expected_intent": "quality_diagnosis",
+      "relevant_chunk_ids": [
+        "1a88e000a7b442b4b72eca08f5b6a4a6",
+        "928ade6a53ad4761a1c952501d22c69e"
+      ],
+      "note": "FAQ Q2 保护层超标处理 + 防水迎水面保护层≥50mm"
+    },
+    {
+      "id": "g14",
+      "query": "有没有地下室顶板裂缝的事故案例及处置经验？",
+      "expected_intent": "case_retrieval",
+      "relevant_chunk_ids": [
+        "01a14694699249079c2b0f91b35fa844",
+        "f1f584d07ee44b79bcab13c9c93e67c1",
+        "2e9a5562ff8949b6a1906a017a1b752d"
+      ],
+      "note": "顶板裂缝事故案例全文（概况/问题/处置/经验）"
+    },
+    {
+      "id": "g15",
+      "query": "脚手架搭设人员需要满足什么资质要求？",
+      "expected_intent": "spec_lookup",
+      "relevant_chunk_ids": ["14e9a73f51d74055b7af854ce0cccae2"],
+      "note": "JGJ130-2011 9.0.1 专业架子工持证、定期体检"
+    },
+    {
+      "id": "g16",
+      "query": "混凝土浇筑作业的标准流程和关键控制要点有哪些？",
+      "expected_intent": "scheme_generation",
+      "relevant_chunk_ids": [
+        "a1c24947b112466e988b531a97839225",
+        "f5d6c7f9dac6484eaf4cf582d5acccb1",
+        "d8d39d11c88b40d89ef39b7446366c13"
+      ],
+      "note": "混凝土浇筑 SOP（进场验收/拆模控制/常见问题处理）"
+    },
+    {
+      "id": "g17",
+      "query": "雨季和夏季高温期间混凝土施工要注意什么？",
+      "expected_intent": "scheme_generation",
+      "relevant_chunk_ids": [
+        "2a18fc6b1bc446449db89e514b3cd238",
+        "fae8817e7aef437d8a949aa932eacc77",
+        "fd5700823d79467c9d5c72b673c41867"
+      ],
+      "note": "FAQ Q4 雨季施工 + SOP 夏季喷淋 + GB50204 浇水养护低温"
+    },
+    {
+      "id": "g18",
+      "query": "施工缝应留在结构的什么位置？",
+      "expected_intent": "spec_lookup",
+      "relevant_chunk_ids": [
+        "e8636e61af004626b7ef8d1eb1607906",
+        "92826736eb0e4621b9aba975bd3bd14a"
+      ],
+      "note": "FAQ Q3 施工缝位置 + GB50204-2015 7.5.1 施工缝规定"
+    }
+  ]
+}
