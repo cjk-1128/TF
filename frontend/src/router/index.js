@@ -32,6 +32,12 @@ const routes = [
         meta: { title: '知识治理闭环', icon: 'DataAnalysis' }
     },
     {
+        path: '/eval',
+        name: 'eval',
+        component: () => import('@/views/EvalView.vue'),
+        meta: { title: '检索评测看板', icon: 'TrendCharts' }
+    },
+    {
         path: '/:pathMatch(.*)*',
         redirect: '/chat'
     }

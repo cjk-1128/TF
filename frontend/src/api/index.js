@@ -53,4 +53,11 @@ export const govApi = {
     gaps: (days = 30) => http.get('/governance/knowledge-gaps', { params: { days } }),
     operationReport: (days = 7) => http.get('/governance/operation-report', { params: { days } })
 };
+// ---------------- 评测 ----------------
+export const evalApi = {
+    run: (apiKey) => http.post('/eval/run', {}, { headers: { 'X-API-Key': apiKey } }),
+    golden: (apiKey) => http.get('/eval/golden', { headers: { 'X-API-Key': apiKey } }),
+    addGolden: (apiKey, data) => http.post('/eval/golden', data, { headers: { 'X-API-Key': apiKey } }),
+    deleteGolden: (apiKey, id) => http.delete(`/eval/golden/${id}`, { headers: { 'X-API-Key': apiKey } })
+};
 export default http;

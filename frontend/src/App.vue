@@ -14,7 +14,8 @@ const menus = [
   { path: '/search', title: '知识片段检索', icon: 'Search' },
   { path: '/knowledge', title: '知识库管理', icon: 'Collection' },
   { path: '/documents', title: '文档与切片', icon: 'Document' },
-  { path: '/governance', title: '知识治理闭环', icon: 'DataAnalysis' }
+  { path: '/governance', title: '知识治理闭环', icon: 'DataAnalysis' },
+  { path: '/eval', title: '检索评测看板', icon: 'TrendCharts' }
 ]
 
 const currentTitle = computed(() => (route.meta?.title as string) || 'TerraForge')
@@ -24,7 +25,8 @@ const subTitle = computed(() => {
     '/search': '混合检索（向量 + BM25 + RRF）与重排序结果透视',
     '/knowledge': '建设规范库 / 项目案例库 / 企业知识库三域管理',
     '/documents': '文档解析入库、工程元数据维护与切片查看',
-    '/governance': '知识健康度、治理事项、知识盲区与运营报告'
+    '/governance': '知识健康度、治理事项、知识盲区与运营报告',
+    '/eval': 'Recall@K / MRR / NDCG@K 评测与逐题检索质量透视'
   }
   return map[route.path] || ''
 })

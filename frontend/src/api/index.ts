@@ -92,4 +92,16 @@ export const govApi = {
     http.get('/governance/operation-report', { params: { days } }) as unknown as Promise<ApiResponse<OperationReport>>
 }
 
+// ---------------- 评测 ----------------
+export const evalApi = {
+  run: (apiKey: string) =>
+    http.post('/eval/run', {}, { headers: { 'X-API-Key': apiKey } }) as unknown as Promise<ApiResponse<any>>,
+  golden: (apiKey: string) =>
+    http.get('/eval/golden', { headers: { 'X-API-Key': apiKey } }) as unknown as Promise<ApiResponse<any>>,
+  addGolden: (apiKey: string, data: Record<string, any>) =>
+    http.post('/eval/golden', data, { headers: { 'X-API-Key': apiKey } }) as unknown as Promise<ApiResponse<any>>,
+  deleteGolden: (apiKey: string, id: string) =>
+    http.delete(`/eval/golden/${id}`, { headers: { 'X-API-Key': apiKey } }) as unknown as Promise<ApiResponse<any>>
+}
+
 export default http
