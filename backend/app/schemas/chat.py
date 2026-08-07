@@ -95,6 +95,7 @@ class RetrievedChunk(BaseModel):
     fusion_score: float = 0.0
     rerank_score: float = 0.0
     final_score: float = 0.0
+    matched_terms: List[str] = []
 
 
 class StageTrace(BaseModel):

@@ -74,6 +74,16 @@ async def search(req: SearchRequest, request: Request,
     return ApiResponse.ok(items, f"命中 {len(items)} 条", get_trace_id())
 
 
+@router.post("/explain", summary="检索可解释性（意图路由 + 多路打分明细）")
+async def explain(req: SearchRequest, request: Request,
+                  db: Session = Depends(get_db),
+                  user: User = Depends(get_current_user)):
+    tenant_id = get_tenant_id(request)
+    req.kb_ids = ChatService(db)._resolve_kb_ids(req.kb_ids, tenant_id, user)
+    data = await SearchService(db).explain(req)
+    return ApiResponse.ok(data, "检索可解释性明细", get_trace_id())
+
+
 # ==================== 会话 ====================
 @router.post("/conversations", response_model=ApiResponse[ConversationOut], summary="创建会话")
 def create_conversation(payload: ConversationCreate, request: Request,

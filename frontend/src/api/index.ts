@@ -69,7 +69,9 @@ export const ragApi = {
   removeConversation: (id: string) =>
     http.delete(`/rag/conversations/${id}`) as unknown as Promise<ApiResponse<any>>,
   feedback: (data: { message_id: string; rating: number; reason?: string; comment?: string }) =>
-    http.post('/rag/feedback', data) as unknown as Promise<ApiResponse<any>>
+    http.post('/rag/feedback', data) as unknown as Promise<ApiResponse<any>>,
+  explain: (data: Record<string, any>) =>
+    http.post('/rag/explain', data) as unknown as Promise<ApiResponse<any>>
 }
 
 // ---------------- 治理 ----------------

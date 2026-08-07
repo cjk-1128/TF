@@ -39,7 +39,8 @@ export const ragApi = {
     conversations: (params) => http.get('/rag/conversations', { params }),
     messages: (id) => http.get(`/rag/conversations/${id}/messages`),
     removeConversation: (id) => http.delete(`/rag/conversations/${id}`),
-    feedback: (data) => http.post('/rag/feedback', data)
+    feedback: (data) => http.post('/rag/feedback', data),
+    explain: (data) => http.post('/rag/explain', data)
 };
 // ---------------- 治理 ----------------
 export const govApi = {

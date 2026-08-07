@@ -108,6 +108,12 @@ class RAGPipeline:
                 state.answer = f"处理过程中发生异常，请稍后重试或联系管理员。（{e}）"
         logger.info("RAG 完成 | 耗时=%dms | 置信度=%.3f | 引用=%d",
                     state.latency_ms, state.confidence, len(state.citations))
+        # 检索可解释性（Sprint6-T3）：摊开内部决策，失败不影响主流程
+        try:
+            from app.rag.explain import build_explanation
+            state.explain = build_explanation(state)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("构建检索可解释性失败（不影响主流程）: %s", e)
         return state
 
     @staticmethod

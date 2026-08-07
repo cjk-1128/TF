@@ -11,7 +11,7 @@ from app.llm.factory import get_reranker
 from app.models.knowledge import Document
 from app.retrieval.hybrid import get_retriever
 from app.schemas.chat import RetrievedChunk, SearchRequest
-from app.utils.text import truncate
+from app.utils.text import tokenize, truncate
 
 logger = get_logger(__name__)
 
@@ -62,5 +62,30 @@ class SearchService:
                 fusion_score=c.fusion_score,
                 rerank_score=float(c.meta.get("rerank_score", 0.0)),
                 final_score=float(c.meta.get("final_score", c.fusion_score)),
+                matched_terms=sorted(set(tokenize(req.query)) & set(tokenize(c.content))),
             ))
         return out
+
+    async def explain(self, req: SearchRequest) -> dict:
+        """检索可解释性：跑通 意图路由 -> 查询改写 -> 混合检索 -> 重排序，
+        返回每路打分、命中词与路由决策的明细，不经过 LLM 生成。"""
+        from app.rag import stages
+        from app.rag.explain import build_explanation
+        from app.rag.state import RAGState
+
+        state = RAGState(
+            query=req.query,
+            kb_ids=list(req.kb_ids or []),
+            domains=[d.value for d in req.domains] or [],
+            top_k=req.top_k,
+        )
+        state = await stages.stage1_route(state)
+        if not state.need_retrieval:
+            state.explain = build_explanation(state)
+            return state.explain
+
+        state = await stages.stage2_rewrite(state)
+        state = await stages.stage3_retrieve(state)
+        state = await stages.stage4_rerank(state)
+        state.explain = build_explanation(state)
+        return state.explain

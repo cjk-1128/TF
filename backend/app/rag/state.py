@@ -84,6 +84,9 @@ class RAGState:
     need_human_review: bool = True
     review_hint: str = ""
 
+    # ---- 检索可解释性（Sprint6-T3）----
+    explain: Dict[str, Any] = field(default_factory=dict)
+
     # ---- 追踪 ----
     traces: List[StageRecord] = field(default_factory=list)
     started_at: float = field(default_factory=time.perf_counter)
