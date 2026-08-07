@@ -18,6 +18,8 @@ const cfg = ref({
   max_chunk_chars: 1200,
   min_chunk_chars: 40,
   run_recall_probe: true,
+  run_vector_checks: true,
+  feed_governance_gaps: false,
   persist: true
 })
 
@@ -38,7 +40,19 @@ const issueLabel: Record<string, string> = {
   missing_location: '缺条文定位',
   duplicate_chunk: '近重复切片',
   orphan_chunk: '孤立切片',
-  low_recall_intent: '低召回意图'
+  low_recall_intent: '低召回意图',
+  missing_vector: '未嵌向量',
+  zero_vector: '零向量',
+  domain_coverage_gap: '域覆盖盲区',
+  isolated_query: '孤立查询'
+}
+const domainLabel: Record<string, string> = {
+  standard: '建设规范库', case: '项目案例库', enterprise: '企业知识库'
+}
+const intentLabel: Record<string, string> = {
+  spec_lookup: '规范条文查询', quality_diagnosis: '质量问题分析',
+  scheme_generation: '施工方案生成', case_retrieval: '工程案例检索',
+  chitchat: '日常对话', unknown: '通用问答'
 }
 const sevType: Record<string, string> = { high: 'danger', medium: 'warning', low: 'info' }
 const alertTypeMeta: Record<string, { label: string; type: string }> = {
@@ -235,6 +249,40 @@ onMounted(() => { loadReports(); loadScoreTrend(); loadAlerts() })
           <ul><li v-for="(s, i) in result.suggestions" :key="i">{{ s }}</li></ul>
         </div>
 
+        <!-- Sprint8 新增维度：向量体检 / 域覆盖 / 孤立查询 -->
+        <div class="dim-wrap" v-if="result.vector_health || result.coverage || result.isolated_queries?.length">
+          <div class="dim-block" v-if="result.vector_health">
+            <div class="dim-title">向量质量体检</div>
+            <span class="dim-meta">检查 {{ result.vector_health.checked }} 个切片</span>
+            <el-tag v-if="result.vector_health.missing" type="warning" size="small" class="dim-tag">未入库 {{ result.vector_health.missing }}</el-tag>
+            <el-tag v-if="result.vector_health.zero" type="danger" size="small" class="dim-tag">零向量 {{ result.vector_health.zero }}</el-tag>
+            <span v-if="!result.vector_health.missing && !result.vector_health.zero" class="ok">全部正常</span>
+            <span v-if="result.vector_health.note" class="cov-note">{{ result.vector_health.note }}</span>
+          </div>
+
+          <div class="dim-block" v-if="result.coverage && Object.keys(result.coverage.domain_counts || {}).length">
+            <div class="dim-title">域覆盖分布</div>
+            <div class="cov-row">
+              <el-tag v-for="(cnt, dom) in result.coverage.domain_counts" :key="dom" size="small"
+                      :type="result.coverage.sparse_domains?.includes(dom) ? 'danger' : 'success'"
+                      class="cov-tag">{{ domainLabel[dom] || dom }}：{{ cnt }}</el-tag>
+            </div>
+            <div v-if="result.coverage.low_recall_intents?.length" class="cov-note">
+              低召回意图：{{ result.coverage.low_recall_intents.map((i: string) => intentLabel[i] || i).join('、') }}
+            </div>
+          </div>
+
+          <div class="dim-block" v-if="result.isolated_queries?.length">
+            <div class="dim-title">孤立查询（零召回 · 确属知识缺口）</div>
+            <ul class="iso-list">
+              <li v-for="(q, i) in result.isolated_queries" :key="i">
+                <el-tag size="small" type="info">{{ intentLabel[q.intent] || q.intent }}</el-tag>
+                <span class="iso-q">{{ q.query }}</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
         <!-- 问题明细 -->
         <h4 class="sec-title">问题明细（{{ issues.length }}）</h4>
         <el-table :data="issues" size="small" border max-height="440" stripe>
@@ -401,6 +449,11 @@ onMounted(() => { loadReports(); loadScoreTrend(); loadAlerts() })
         <el-form-item label="超大切片(字)"><el-input-number v-model="cfg.max_chunk_chars" :min="200" :max="8000" :step="100" /></el-form-item>
         <el-form-item label="碎片切片(字)"><el-input-number v-model="cfg.min_chunk_chars" :min="1" :max="500" :step="5" /></el-form-item>
         <el-form-item label="召回探针"><el-switch v-model="cfg.run_recall_probe" /></el-form-item>
+        <el-form-item label="向量体检"><el-switch v-model="cfg.run_vector_checks" /></el-form-item>
+        <el-form-item label="回流治理缺口">
+          <el-switch v-model="cfg.feed_governance_gaps" />
+          <span class="hint">孤立查询自动写入治理知识缺口</span>
+        </el-form-item>
         <el-form-item label="快照落库"><el-switch v-model="cfg.persist" /></el-form-item>
         <el-divider content-position="left">定时告警阈值</el-divider>
         <el-form-item label="低分告警阈值">
@@ -434,6 +487,18 @@ onMounted(() => { loadReports(); loadScoreTrend(); loadAlerts() })
 .sugg ul { margin: 0; padding-left: 18px; }
 .sugg li { font-size: 12.5px; color: #5a6b80; line-height: 1.8; }
 .sec-title { margin: 14px 0 8px; font-size: 14px; color: #2c3a4b; }
+.dim-wrap { display: flex; flex-direction: column; gap: 10px; margin: 4px 0 10px; }
+.dim-block { background: #f7f9fd; border: 1px solid #e8eef8; border-radius: 8px; padding: 10px 14px; }
+.dim-title { font-size: 13px; font-weight: 600; color: #2c3a4b; margin-bottom: 6px; }
+.dim-meta { font-size: 12.5px; color: #5a6b80; margin-right: 10px; }
+.dim-tag { margin-right: 6px; }
+.cov-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.cov-tag { font-weight: 600; }
+.cov-note { font-size: 12px; color: #8595a8; margin-top: 6px; }
+.iso-list { margin: 0; padding-left: 4px; list-style: none; }
+.iso-list li { font-size: 12.5px; color: #5a6b80; line-height: 2; display: flex; gap: 8px; align-items: center; }
+.iso-q { color: #2c3a4b; }
+.hint { font-size: 11px; color: #8595a8; margin-left: 8px; }
 .ok { color: #1a9d5a; font-weight: 600; }
 .bad { color: #d9534f; font-weight: 600; }
 .agg-meta { font-size: 12px; color: #8595a8; margin: 8px 0 4px; }

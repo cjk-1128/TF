@@ -8,7 +8,7 @@ from __future__ import annotations
 import pickle
 import threading
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import numpy as np
 
@@ -138,3 +138,22 @@ class LocalVectorStore(BaseVectorStore):
 
     def count(self) -> int:
         return len(self._ids)
+
+    def get_vector_norms(self, ids: List[str]) -> Dict[str, float]:
+        """返回给定向量 id 的 L2 范数（用于质量巡检的「向量质量」维度）。
+
+        本地向量在写入时已 L2 归一化，故：
+          - 正常向量范数 ≈ 1.0；
+          - 零向量（全 0 退化/嵌入异常）范数 = 0.0，检索必然失配；
+          - id 不在库中（未入库/已删除）返回 -1.0（缺失）。
+        Milvus 等远端后端不保证此语义，故仅本地后端提供。
+        """
+        with self._lock:
+            if self._matrix is None:
+                return {rid: -1.0 for rid in ids}
+            id2pos = {rid: i for i, rid in enumerate(self._ids)}
+            out: Dict[str, float] = {}
+            for rid in ids:
+                pos = id2pos.get(rid)
+                out[rid] = -1.0 if pos is None else float(np.linalg.norm(self._matrix[pos]))
+            return out

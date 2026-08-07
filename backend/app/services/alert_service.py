@@ -21,8 +21,8 @@ from app.services.quality_service import QualityInspector
 
 logger = get_logger(__name__)
 
-# 被认定为「高危」的问题类型（质量巡检中 severity=high 的只有低召回意图）。
-HIGH_SEVERITY_TYPES = {"low_recall_intent"}
+# 被认定为「高危」的问题类型（质量巡检中 severity=high 的类型）。
+HIGH_SEVERITY_TYPES = {"low_recall_intent", "zero_vector", "isolated_query"}
 
 
 def _high_count(issue_counts: dict) -> int:

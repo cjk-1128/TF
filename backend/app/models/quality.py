@@ -37,6 +37,12 @@ class QualityReport(Base):
     issues = Column(JSON, default=list, comment="问题明细列表（截断保存前 N 条）")
     suggestions = Column(JSON, default=list, comment="巡检 Agent 给出的行动建议")
 
+    # Sprint8 质量巡检 Agent 扩充：向量质量 + 域覆盖盲区 + 孤立查询
+    vector_health = Column(JSON, default=dict,
+                           comment="向量质量体检 {checked, missing, zero, note}")
+    coverage = Column(JSON, default=dict,
+                      comment="域覆盖分布 {domain_counts, sparse_domains, low_recall_intents, max_domain_chunks}")
+
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
     __table_args__ = (

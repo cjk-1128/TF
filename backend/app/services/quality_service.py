@@ -12,8 +12,13 @@
 - 语义（Embedding）：
   · duplicate_chunk   近重复切片（冗余、检索互相挤占、答案重复）
   · orphan_chunk      孤立切片（与全库其他切片相似度极低，疑似跑题/噪声）
+- 向量质量（共享向量库）：
+  · missing_vector    切片未写入向量库（未 Embedding / 已删索引），向量检索不可见
+  · zero_vector       向量为零向量（退化/嵌入异常），该切片检索必然失配
 - 检索（黄金集探针，可选）：
   · low_recall_intent 某意图下黄金集平均 Recall@5 偏低（覆盖薄弱）
+  · domain_coverage_gap 某知识域切片支撑稀疏（检索盲区）
+  · isolated_query    黄金集问题零候选召回（确属知识缺口，可回流治理）
 """
 from __future__ import annotations
 
@@ -24,13 +29,15 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 from sqlalchemy.orm import Session
 
-from app.core.constants import KnowledgeDomain
+from app.core.constants import (INTENT_DOMAIN_ROUTING, KnowledgeDomain,
+                                QueryIntent)
 from app.core.logging import get_logger
 from app.llm.factory import get_embedding
 from app.models.governance import GovernanceTask
 from app.models.knowledge import Chunk, Document, KnowledgeBase
 from app.models.quality import QualityReport
 from app.schemas.quality import QualityIssue
+from app.vectorstore.factory import get_vector_store
 
 logger = get_logger(__name__)
 
@@ -47,7 +54,9 @@ class QualityInspector:
     async def inspect(self, tenant_id: str = "default", kb_id: Optional[str] = None,
                       dup_threshold: float = 0.92, orphan_threshold: float = 0.12,
                       max_chunk_chars: int = 1200, min_chunk_chars: int = 40,
-                      run_recall_probe: bool = True,
+                      run_recall_probe: bool = True, run_vector_checks: bool = True,
+                      feed_governance_gaps: bool = False,
+                      sparse_domain_threshold: int = 3,
                       persist: bool = True, max_issue_detail: int = 200) -> dict:
         # 1) 取切片（软删的不参与）
         cq = (self.db.query(Chunk)
@@ -76,18 +85,48 @@ class QualityInspector:
         elif len(chunks) > MAX_SEMANTIC_CHUNKS:
             semantic_note = f"切片数 {len(chunks)} 超过 {MAX_SEMANTIC_CHUNKS}，本次跳过语义近重复/孤立巡检"
 
-        # 3) 检索覆盖探针（低召回意图）
-        intent_probe: Dict[str, float] = {}
-        if run_recall_probe:
-            probe_issues, intent_probe = await self._recall_probe(tenant_id, kb_id)
-            issues += probe_issues
+        # 3) 向量质量体检（零向量 / 未入库）
+        vector_health: Dict = {"missing": 0, "zero": 0, "checked": 0, "note": ""}
+        if run_vector_checks:
+            v_issues, vector_health = self._vector_checks(chunks, docs)
+            issues += v_issues
+        else:
+            vector_health["note"] = "向量质量检查未启用"
 
-        # 4) 评分 + 建议
+        # 4) 检索覆盖探针（低召回意图 + 孤立查询）
+        intent_probe: Dict[str, float] = {}
+        per_query: List[Dict] = []
+        isolated_queries: List[Dict] = []
+        if run_recall_probe:
+            probe_issues, intent_probe, per_query = await self._recall_probe(tenant_id, kb_id)
+            issues += probe_issues
+            # 孤立查询：正样本黄金集问题在候选池零命中 → 确属知识缺口
+            for p in per_query:
+                if p.get("negative"):
+                    continue
+                if (p.get("hits_candidates") or 0) == 0:
+                    isolated_queries.append({
+                        "query": p.get("query", ""),
+                        "intent": p.get("expected_intent") or p.get("intent") or "unknown",
+                    })
+        if isolated_queries:
+            issues += self._build_isolated_issues(isolated_queries, kb_id)
+            if feed_governance_gaps:
+                await self._feed_isolated_gaps(isolated_queries, tenant_id)
+
+        # 5) 域覆盖盲区
+        coverage_issues, coverage = self._coverage_checks(
+            chunks, intent_probe, sparse_domain_threshold)
+        issues += coverage_issues
+
+        # 6) 评分 + 建议
         total_docs = len(docs) if docs else self._count_docs(tenant_id, kb_id)
         total_chunks = len(chunks)
         score = self._score(issues, total_chunks)
         counts = Counter(i.issue_type for i in issues)
-        suggestions = self._suggestions(counts, intent_probe, semantic_note)
+        suggestions = self._suggestions(
+            counts, intent_probe, semantic_note, vector_health, coverage,
+            isolated_queries, feed_governance_gaps)
 
         # 明细截断（按严重度排序后保存）
         sev_rank = {"high": 0, "medium": 1, "low": 2}
@@ -105,6 +144,9 @@ class QualityInspector:
             "issue_counts": dict(counts),
             "issues": [i.model_dump() for i in issues_kept],
             "suggestions": suggestions,
+            "vector_health": vector_health,
+            "coverage": coverage,
+            "isolated_queries": isolated_queries,
             "created_at": datetime.utcnow(),
         }
 
@@ -115,6 +157,7 @@ class QualityInspector:
                 total_docs=total_docs, total_chunks=total_chunks,
                 issue_count=len(issues), issue_counts=dict(counts),
                 issues=result["issues"], suggestions=suggestions,
+                vector_health=vector_health, coverage=coverage,
             )
             self.db.add(rep)
             self.db.flush()
@@ -230,22 +273,163 @@ class QualityInspector:
                 ))
         return out
 
+    # ---------------------------------------------------------------- 向量质量
+    def _vector_checks(self, chunks: List[Chunk],
+                       docs: Dict[str, Document]) -> Tuple[List[QualityIssue], Dict]:
+        """向量质量体检：检测未入库（missing_vector）与零向量（zero_vector）。
+
+        通过共享向量库的 get_vector_norms：正常向量范数≈1.0，零向量=0.0（退化），
+        不在库中=-1.0（缺失）。仅 local 后端支持逐条体检，其它后端跳过并给备注。
+        """
+        out: List[QualityIssue] = []
+        health: Dict = {"missing": 0, "zero": 0, "checked": 0, "note": ""}
+        try:
+            store = get_vector_store()
+        except Exception as e:  # noqa: BLE001
+            health["note"] = f"向量库不可用，跳过向量质量检查：{e}"
+            return out, health
+        if not hasattr(store, "get_vector_norms"):
+            health["note"] = "当前向量后端不支持逐条向量体检（仅 local 支持），已跳过"
+            return out, health
+
+        health["checked"] = len(chunks)
+        ids = [c.vector_id for c in chunks if (c.vector_id or "").strip()]
+        norms = store.get_vector_norms(ids) if ids else {}
+        present = set(ids)
+        for c in chunks:
+            vid = (c.vector_id or "").strip()
+            title = docs.get(c.doc_id).title if docs.get(c.doc_id) else ""
+            if not vid or vid not in present:
+                health["missing"] += 1
+                out.append(QualityIssue(
+                    issue_type="missing_vector", severity="medium",
+                    chunk_id=c.id, doc_id=c.doc_id, doc_title=title, kb_id=c.kb_id,
+                    detail="切片未写入向量库（vector_id 为空或未命中），向量检索不可见",
+                    suggestion="重新触发该文档的 Embedding 入库步骤，确认写入向量库",
+                    extra={"kind": "missing"}))
+                continue
+            norm = norms.get(vid, -1.0)
+            if norm == 0.0:
+                health["zero"] += 1
+                out.append(QualityIssue(
+                    issue_type="zero_vector", severity="high",
+                    chunk_id=c.id, doc_id=c.doc_id, doc_title=title, kb_id=c.kb_id,
+                    detail="向量为零向量（退化/嵌入异常），该切片在向量检索中必然失配",
+                    suggestion="删除并重嵌该切片向量，检查嵌入模型是否返回全零",
+                    extra={"kind": "zero"}))
+        return out, health
+
+    # ---------------------------------------------------------------- 域覆盖盲区
+    def _coverage_checks(self, chunks: List[Chunk], intent_recall: Dict[str, float],
+                         sparse_threshold: int) -> Tuple[List[QualityIssue], Dict]:
+        """域覆盖盲区：统计各知识域切片分布，标记稀疏域；结合低召回意图补全盲区域。"""
+        out: List[QualityIssue] = []
+        domain_counts: Dict[str, int] = defaultdict(int)
+        for c in chunks:
+            domain_counts[c.domain] += 1
+
+        expected = sorted(domain_counts.keys())
+        max_count = max(domain_counts.values()) if domain_counts else 0
+        sparse_domains: List[str] = []
+        domain_labels = {d.value: d.label for d in KnowledgeDomain}
+        for dom in expected:
+            cnt = domain_counts[dom]
+            if cnt <= sparse_threshold:
+                sparse_domains.append(dom)
+                sev = "high" if cnt == 0 else "medium"
+                out.append(QualityIssue(
+                    issue_type="domain_coverage_gap", severity=sev,
+                    chunk_id="", doc_id="", doc_title="",
+                    kb_id="",  # 域级问题，不绑定具体库
+                    detail=(f"知识域「{domain_labels.get(dom, dom)}」仅 {cnt} 个切片，"
+                            f"覆盖稀疏，易成为检索盲区"),
+                    suggestion=f"补充「{domain_labels.get(dom, dom)}」资料，"
+                                f"提升对应意图的召回与答案质量",
+                    extra={"domain": dom, "chunk_count": cnt}))
+
+        # 低召回意图 → 关联域补入盲区（即便切片数未触达稀疏阈值，召回弱也说明支撑不足）
+        low_intents = [k for k, v in intent_recall.items() if v < 0.7]
+        for intent in low_intents:
+            try:
+                dom_list = [d.value for d in INTENT_DOMAIN_ROUTING.get(QueryIntent(intent), [])]
+            except Exception:  # noqa: BLE001
+                dom_list = []
+            for dom in dom_list:
+                if dom not in sparse_domains:
+                    sparse_domains.append(dom)
+
+        coverage = {
+            "domain_counts": dict(domain_counts),
+            "sparse_domains": sparse_domains,
+            "low_recall_intents": low_intents,
+            "max_domain_chunks": max_count,
+        }
+        return out, coverage
+
+    # ---------------------------------------------------------------- 孤立查询
+    def _build_isolated_issues(self, isolated_queries: List[Dict],
+                               kb_id: str) -> List[QualityIssue]:
+        """孤立查询（零候选召回）转为质量问题。"""
+        out: List[QualityIssue] = []
+        intent_labels = {i.value: i.label for i in QueryIntent}
+        for q in isolated_queries:
+            intent = q.get("intent", "unknown")
+            out.append(QualityIssue(
+                issue_type="isolated_query", severity="high",
+                chunk_id="", doc_id="", doc_title="", kb_id=kb_id or "",
+                detail=(f"黄金集问题「{q.get('query', '')}」零候选召回"
+                        f"（知识库内无任何相关切片），确属知识缺口"),
+                suggestion="补充覆盖该问题的规范/案例文档，或确认该问题不应归属本知识库",
+                extra={"intent": intent,
+                       "intent_label": intent_labels.get(intent, intent),
+                       "query": q.get("query", "")}))
+        return out
+
+    async def _feed_isolated_gaps(self, isolated_queries: List[Dict],
+                                  tenant_id: str) -> None:
+        """把孤立查询回流为治理知识缺口（capture_gap），形成"答不好→补文档"闭环。"""
+        try:
+            from app.services.governance_service import GovernanceService
+        except Exception as e:  # noqa: BLE001
+            logger.warning("孤立查询回流治理失败（导入治理服务）：%s", e)
+            return
+        gs = GovernanceService(self.db)
+        fed = 0
+        for q in isolated_queries:
+            try:
+                intent = q.get("intent") or "unknown"
+                try:
+                    dom_list = [d.value for d in INTENT_DOMAIN_ROUTING.get(QueryIntent(intent), [])]
+                except Exception:  # noqa: BLE001
+                    dom_list = []
+                gs.capture_gap(query=q.get("query", ""), intent=intent,
+                               domains=dom_list, user_id="quality_agent",
+                               confidence=0.9)
+                fed += 1
+            except Exception as e:  # noqa: BLE001
+                logger.warning("孤立查询回流治理失败（query=%s）：%s",
+                               (q.get("query") or "")[:40], e)
+        if fed:
+            logger.info("质量巡检孤立查询回流治理 | tenant=%s | 缺口=%d", tenant_id, fed)
+
     # ---------------------------------------------------------------- 检索探针
     async def _recall_probe(self, tenant_id: str,
-                            kb_id: Optional[str]) -> Tuple[List[QualityIssue], Dict[str, float]]:
-        """跑黄金集，按意图聚合 Recall@5，标记覆盖薄弱的意图。"""
+                            kb_id: Optional[str]) -> Tuple[List[QualityIssue], Dict[str, float], List[Dict]]:
+        """跑黄金集，按意图聚合 Recall@5，标记覆盖薄弱的意图；返回逐题结果用于孤立查询识别。"""
         out: List[QualityIssue] = []
         intent_recall: Dict[str, float] = {}
+        per_query: List[Dict] = []
         try:
             from app.services.eval_service import run_evaluation
             kb_ids = [kb_id] if kb_id else None
             res = await run_evaluation(self.db, tenant_id=tenant_id, kb_ids=kb_ids)
         except Exception as ex:  # 黄金集缺失或范围为空时不阻断巡检
             logger.warning("召回探针跳过：%s", ex)
-            return out, intent_recall
+            return out, intent_recall, per_query
 
+        per_query = res.get("per_query", [])
         by_intent: Dict[str, List[float]] = defaultdict(list)
-        for p in res.get("per_query", []):
+        for p in per_query:
             if p.get("negative"):
                 continue
             intent = p.get("expected_intent") or p.get("intent") or "unknown"
@@ -268,7 +452,7 @@ class QualityInspector:
                     extra={"intent": intent, "avg_recall@5": round(avg, 4),
                            "n_queries": len(vals)},
                 ))
-        return out, intent_recall
+        return out, intent_recall, per_query
 
     # ---------------------------------------------------------------- 评分/建议
     def _count_docs(self, tenant_id: str, kb_id: Optional[str]) -> int:
@@ -284,7 +468,8 @@ class QualityInspector:
         return max(0.0, 100.0 - (penalty / base) * 20.0)
 
     def _suggestions(self, counts: Counter, intent_recall: Dict[str, float],
-                     semantic_note: str) -> List[str]:
+                     semantic_note: str, vector_health: Dict, coverage: Dict,
+                     isolated_queries: List[Dict], isolated_fed: bool) -> List[str]:
         s: List[str] = []
         if counts.get("duplicate_chunk"):
             s.append(f"发现 {counts['duplicate_chunk']} 组近重复切片，建议合并去重以减少检索冲突与冗余答案")
@@ -296,6 +481,16 @@ class QualityInspector:
             s.append(f"{counts['missing_location']} 个切片缺章节/条文定位，建议优化解析或按标题层级重切")
         if counts.get("oversized_chunk") or counts.get("tiny_chunk"):
             s.append("存在过大/过碎切片，建议统一切分策略（按条款/语义边界），平衡片段粒度")
+        # Sprint8 新增维度
+        if counts.get("missing_vector") or counts.get("zero_vector"):
+            s.append(f"向量质量问题：{vector_health.get('missing', 0)} 个切片未入库、"
+                      f"{vector_health.get('zero', 0)} 个零向量，建议重跑 Embedding 入库并检查嵌入服务")
+        if counts.get("domain_coverage_gap"):
+            sd = coverage.get("sparse_domains", [])
+            s.append(f"域覆盖盲区：{', '.join(sd)} 切片支撑稀疏，建议补充对应域资料")
+        if isolated_queries:
+            tail = "（已回流治理知识缺口）" if isolated_fed else "（可开启 feed_governance_gaps 回流治理）"
+            s.append(f"{len(isolated_queries)} 个黄金集问题零召回（孤立查询），建议优先补充相关文档{tail}")
         low = [k for k, v in intent_recall.items() if v < 0.7]
         if low:
             s.append(f"意图 {', '.join(low)} 召回偏低，建议优先补充对应场景资料")
@@ -334,6 +529,10 @@ class QualityInspector:
             "oversized_chunk": "gap_fill",
             "tiny_chunk": "gap_fill",
             "low_recall_intent": "gap_fill",
+            "missing_vector": "gap_fill",
+            "zero_vector": "gap_fill",
+            "domain_coverage_gap": "gap_fill",
+            "isolated_query": "gap_fill",
         }
         task = GovernanceTask(
             task_type=type_map.get(issue_type, "gap_fill"),

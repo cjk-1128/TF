@@ -11,7 +11,8 @@ class QualityIssue(BaseModel):
     """单条质量问题。"""
     issue_type: str = Field(..., description=(
         "oversized_chunk/tiny_chunk/missing_standard_code/missing_location/"
-        "duplicate_chunk/orphan_chunk/low_recall_intent"))
+        "duplicate_chunk/orphan_chunk/low_recall_intent/"
+        "missing_vector/zero_vector/domain_coverage_gap/isolated_query"))
     severity: str = "medium"          # high/medium/low
     chunk_id: str = ""
     doc_id: str = ""
@@ -19,7 +20,7 @@ class QualityIssue(BaseModel):
     kb_id: str = ""
     detail: str = ""
     suggestion: str = ""
-    extra: dict = {}                  # 相似度、关联切片、命中率等补充信息
+    extra: dict = {}                  # 相似度、关联切片、命中率、域、意图等补充信息
 
 
 class QualityInspectRequest(BaseModel):
@@ -31,6 +32,10 @@ class QualityInspectRequest(BaseModel):
     max_chunk_chars: int = Field(1200, ge=200, le=8000, description="超大切片阈值")
     min_chunk_chars: int = Field(40, ge=1, le=500, description="碎片切片阈值")
     run_recall_probe: bool = Field(True, description="是否跑黄金集低召回意图探针")
+    run_vector_checks: bool = Field(True, description="是否做向量质量体检（零向量/未入库）")
+    feed_governance_gaps: bool = Field(False, description="是否把孤立查询回流为治理知识缺口")
+    sparse_domain_threshold: int = Field(3, ge=1, le=100,
+                                         description="域覆盖盲区判定：某域切片数≤该值视为稀疏")
     persist: bool = Field(True, description="是否把本次巡检快照落库")
     max_issue_detail: int = Field(200, ge=10, le=2000, description="明细最多保存条数")
 
@@ -48,6 +53,9 @@ class QualityReportOut(BaseModel):
     issue_counts: dict = {}
     issues: List[QualityIssue] = []
     suggestions: List[str] = []
+    vector_health: dict = {}          # Sprint8：向量质量体检摘要
+    coverage: dict = {}               # Sprint8：域覆盖分布与稀疏域
+    isolated_queries: List[dict] = []  # Sprint8：零召回的孤立查询（仅本次响应，不落库）
     created_at: Optional[datetime] = None
 
 
