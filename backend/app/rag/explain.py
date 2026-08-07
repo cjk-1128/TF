@@ -65,6 +65,11 @@ def _explain_candidate(c, query_tokens: set, used: bool) -> Dict[str, Any]:
         "is_mandatory": bool(c.meta.get("is_mandatory")),
         "governance_status": c.meta.get("governance_status", "valid"),
         "used": used,
+        "reranked": bool(c.meta.get("rerank_score")),
+        "signal": ("向量+BM25" if (c.vector_rank and c.bm25_rank)
+                   else "向量" if c.vector_rank
+                   else "BM25" if c.bm25_rank
+                   else "未命中"),
     }
 
 
@@ -93,6 +98,14 @@ def build_explanation(state: RAGState) -> Dict[str, Any]:
                 rejection_reason = t.detail.get("reason")
                 break
 
+    # 命中信号汇总：解释检索"靠哪路召回"
+    signal_summary = {
+        "vector": sum(1 for c in pool if c.vector_rank),
+        "bm25": sum(1 for c in pool if c.bm25_rank),
+        "reranked": sum(1 for c in pool if c.meta.get("rerank_score")),
+        "both": sum(1 for c in pool if (c.vector_rank and c.bm25_rank)),
+    }
+
     info = _intent_info(state)
     return {
         "query": state.query,
@@ -106,5 +119,6 @@ def build_explanation(state: RAGState) -> Dict[str, Any]:
         "rejection_reason": rejection_reason,
         "candidate_count": len(state.candidates),
         "final_count": len(state.reranked),
+        "signal_summary": signal_summary,
         "candidates": rows,
     }

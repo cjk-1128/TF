@@ -204,6 +204,47 @@ onMounted(async () => {
           </el-descriptions-item>
         </el-descriptions>
 
+        <!-- 未命中归因（T3 闭环，与可解释性联动） -->
+        <div v-if="explain.attribution" style="margin-bottom: 12px">
+          <div class="tf-section-subtitle" style="margin: 6px 0 8px">
+            未命中归因（根因与修复建议）
+          </div>
+          <el-alert
+            v-if="explain.attribution.verdict === 'retrieval_ok'"
+            type="success" :closable="false" show-icon
+            title="检索正常：知识库对该查询覆盖充分，无需归因"
+            style="margin-bottom: 8px"
+          />
+          <template v-else>
+            <el-descriptions :column="3" border size="small" style="margin-bottom: 8px">
+              <el-descriptions-item label="归因结论">
+                <el-tag :type="(verdictMeta[explain.attribution.verdict] || { type: 'info' }).type" size="small">
+                  {{ (verdictMeta[explain.attribution.verdict] || { label: explain.attribution.verdict }).label }}
+                </el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item label="意图域命中">{{ explain.attribution.retrieved_count }} 条</el-descriptions-item>
+              <el-descriptions-item label="全库命中">{{ explain.attribution.broad_retrieved_count }} 条</el-descriptions-item>
+            </el-descriptions>
+            <el-table v-if="explain.attribution.reasons && explain.attribution.reasons.length"
+                      :data="explain.attribution.reasons" size="small" border stripe
+                      :default-sort="{ prop: 'confidence', order: 'descending' }">
+              <el-table-column label="根因" width="132">
+                <template #default="{ row }">
+                  <el-tag :type="(reasonMeta[row.code] || { type: 'info' }).type" size="small">
+                    {{ (reasonMeta[row.code] || { label: row.code }).label }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="label" label="说明" min-width="160" show-overflow-tooltip />
+              <el-table-column prop="confidence" label="置信度" width="92" sortable>
+                <template #default="{ row }">{{ (row.confidence * 100).toFixed(0) }}%</template>
+              </el-table-column>
+              <el-table-column prop="evidence" label="证据（管线信号）" min-width="200" show-overflow-tooltip />
+              <el-table-column prop="suggestion" label="修复建议" min-width="190" show-overflow-tooltip />
+            </el-table>
+          </template>
+        </div>
+
         <el-alert
           v-if="explain.below_relevance_floor"
           type="warning"
@@ -224,13 +265,27 @@ onMounted(async () => {
 
         <div class="tf-section-subtitle" style="margin: 8px 0">
           候选切片打分明细
-          <span class="tf-muted">（候选 {{ explain.candidate_count }} 条 · 最终入选 {{ explain.final_count }} 条）</span>
+          <span class="tf-muted">
+            （候选 {{ explain.candidate_count }} 条 · 最终入选 {{ explain.final_count }} 条
+            <template v-if="explain.signal_summary">
+              · 向量命中 {{ explain.signal_summary.vector }} · BM25 命中 {{ explain.signal_summary.bm25 }} · 双通道 {{ explain.signal_summary.both }}
+            </template>）
+          </span>
         </div>
         <el-table :data="explain.candidates" size="small" border stripe max-height="460"
                   :default-sort="{ prop: 'final_score', order: 'descending' }">
           <el-table-column type="index" label="#" width="42" />
           <el-table-column prop="doc_title" label="来源文档" min-width="180" show-overflow-tooltip />
           <el-table-column prop="domain" label="域" width="80" />
+          <el-table-column label="命中信号" width="104">
+            <template #default="{ row }">
+              <el-tag v-if="row.signal && row.signal !== '未命中'"
+                      :type="row.signal === '向量+BM25' ? 'success' : 'warning'" size="small">
+                {{ row.signal }}
+              </el-tag>
+              <el-tag v-else type="info" size="small">未命中</el-tag>
+            </template>
+          </el-table-column>
           <el-table-column prop="vector_score" label="向量分" width="92" sortable />
           <el-table-column prop="bm25_score" label="BM25分" width="92" sortable />
           <el-table-column prop="fusion_score" label="融合分" width="92" sortable />

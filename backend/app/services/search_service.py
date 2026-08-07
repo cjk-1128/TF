@@ -88,4 +88,12 @@ class SearchService:
         state = await stages.stage3_retrieve(state)
         state = await stages.stage4_rerank(state)
         state.explain = build_explanation(state)
+        # 归因（T3 闭环）：把"为什么没答好"的根因一并透出，与可解释性联动
+        try:
+            from app.services.miss_attribution import MissAttributor
+            attr = await MissAttributor(self.db).diagnose(
+                req.query, kb_ids=list(req.kb_ids or []) or None, capture_gap=False)
+            state.explain["attribution"] = attr
+        except Exception as e:  # noqa: BLE001
+            logger.warning("归因附加至可解释性失败（不影响主解释）: %s", e)
         return state.explain

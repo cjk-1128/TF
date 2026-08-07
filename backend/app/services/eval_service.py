@@ -186,7 +186,10 @@ async def seed_eval_corpus(db: Session, tenant_id: str = "default",
             KnowledgeBaseCreate(name=kb_name, domain="standard",
                                 description="CI 自包含评测库（请勿手工修改）"),
             tenant_id=tenant_id)
-        db.flush()
+        # 评测专用 KB 保持非活跃：不参与生产检索与默认评测范围，
+        # CI 测试以显式 kb_ids 指定该库，不受影响。
+        kb.is_active = False
+        db.commit()
 
     items: List[Dict] = []
     for d in data.get("documents", []):
