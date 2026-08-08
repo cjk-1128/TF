@@ -129,8 +129,9 @@ async def health():
     async def _safe_count(fn, default=0):
         # 阻塞型后端调用（pymilvus / 磁盘索引）放到线程并加超时，
         # 即使 Milvus/Redis 抖动也不会卡死事件循环。
+        # 注意：Milvus count() 实测约 4~5s，超时须 > 此值，否则会被静默成默认值。
         try:
-            return await asyncio.wait_for(asyncio.to_thread(fn), timeout=2.0)
+            return await asyncio.wait_for(asyncio.to_thread(fn), timeout=15.0)
         except Exception:  # noqa: BLE001
             return default
 
@@ -171,8 +172,9 @@ async def metrics():
         from app.core.cache import cache_stats
 
         async def _safe_count(fn, default=0):
+            # 超时须 > Milvus count() 实测 4~5s，否则被静默成默认值
             try:
-                return await asyncio.wait_for(asyncio.to_thread(fn), timeout=2.0)
+                return await asyncio.wait_for(asyncio.to_thread(fn), timeout=15.0)
             except Exception:  # noqa: BLE001
                 return default
 

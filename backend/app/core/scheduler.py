@@ -24,7 +24,7 @@ async def _tick_once() -> None:
 
     db = SessionLocal()
     try:
-        report, alerts = await run_scheduled_inspection(
+        report, alerts, _tasks = await run_scheduled_inspection(
             db, tenant_id=settings.DEFAULT_TENANT_ID,
             score_threshold=settings.QUALITY_ALERT_SCORE_THRESHOLD,
             new_high_threshold=settings.QUALITY_ALERT_NEW_HIGH_THRESHOLD,

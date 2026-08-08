@@ -177,3 +177,28 @@ cd /root/terraforge && docker compose up -d web
 
 > 前端 API 基址为相对路径 `/api/v1`，nginx `location /api/` 已反代到 `web:8001`，无需额外配置。
 > SPA history 路由回退由 `app/main.py` 的 `spa_fallback` 处理（`/api`、`/docs`、`/health` 等保留路径除外）。
+
+---
+
+## 6. 替换为真实 CA 证书（去自签警告）
+
+现网用 `tools/gen_ssl.sh` 生成的自签名证书，浏览器会报"不安全"。nginx 已配置为读取容器内
+`/etc/nginx/ssl/terraforge.crt` 与 `/etc/nginx/ssl/terraforge.key`，**二者由宿主机 `nginx/ssl/` 目录挂载**（见 `docker-compose.yml` 的 nginx volumes）。换真实证书只需替换文件并 reload，无需改代码或重建。
+
+**手动替换（最简）**：
+1. 向 VM 的 `/root/terraforge/nginx/ssl/` 放入：
+   - `terraforge.crt`（= CA 签发的**完整链** fullchain，含中间证书）
+   - `terraforge.key`（私钥，**切勿提交**，已被 `.gitignore` 忽略）
+2. 重载 nginx：
+   ```bash
+   cd /root/terraforge && docker compose exec nginx nginx -s reload
+   ```
+3. 浏览器访问 `https://<你的域名>/`，警告消失。
+
+> `server_name` 当前为通配 `_`，SNI 按证书域名匹配即可，无需改虚拟主机名。
+> `gen_ssl.sh` 仅在证书**不存在**时生成自签名；置入真实证书后不会再被覆盖。
+
+**用 Let's Encrypt（certbot / HTTP-01）**：`nginx/terraforge.conf` 已预留 `location /.well-known/acme-challenge/ { root /var/www/certbot; }`。
+若用 certbot，须给 nginx 容器加挂载 `./certbot/www:/var/www/certbot:ro`，签发后把 fullchain/privkey 落到 `nginx/ssl/` 并重载。
+
+**证书续期提醒**：自签名/Let's Encrypt 均有有效期，到期前需重新生成/签发并 reload，否则浏览器再次告警。可配合 `tools/` 下的定时任务纳入巡检。
