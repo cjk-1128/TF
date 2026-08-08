@@ -59,8 +59,11 @@ class HybridRetriever:
         wb = bm25_weight if bm25_weight is not None else settings.HYBRID_BM25_WEIGHT
         threshold = score_threshold if score_threshold is not None else settings.SCORE_THRESHOLD
 
+        # BM25 通道候选放大：词面召回常在更深处命中（规范号/术语/错别字匹配），
+        # 令其比向量通道多取 HYBRID_BM25_CANDIDATE_MULT 倍候选再参与 RRF 融合。
+        bm_top_k = max(top_k, int(top_k * settings.HYBRID_BM25_CANDIDATE_MULT))
         vec_task = asyncio.create_task(self._vector_search(query, top_k, kb_ids, domains))
-        bm_task = asyncio.to_thread(self.bm25.search, query, top_k, kb_ids, domains)
+        bm_task = asyncio.to_thread(self.bm25.search, query, bm_top_k, kb_ids, domains)
         vec_hits, bm_hits = await asyncio.gather(vec_task, bm_task)
 
         pool: Dict[str, Candidate] = {}

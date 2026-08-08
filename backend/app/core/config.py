@@ -134,6 +134,9 @@ class Settings(BaseSettings):
     HYBRID_BM25_WEIGHT: float = 0.4    # 关键词通道权重
     RRF_K: int = 60                    # RRF 融合常数
     SCORE_THRESHOLD: float = 0.15      # 召回分数下限
+    # BM25 通道候选放大倍数：词面召回常在更深处命中（精确规范号/术语/错别字的词面匹配），
+    # 令 BM25 比向量通道多取若干倍候选再参与 RRF 融合，提升词面召回覆盖而不影响向量主信号。
+    HYBRID_BM25_CANDIDATE_MULT: float = 2.0
 
     # ---------------- 相关性门槛（防止"无依据硬答"） ----------------
     # 重排后 top1 必须达到该分数，否则视为知识库未覆盖该问题

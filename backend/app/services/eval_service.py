@@ -186,9 +186,12 @@ async def seed_eval_corpus(db: Session, tenant_id: str = "default",
             KnowledgeBaseCreate(name=kb_name, domain="standard",
                                 description="CI 自包含评测库（请勿手工修改）"),
             tenant_id=tenant_id)
-        # 评测专用 KB 保持非活跃：不参与生产检索与默认评测范围，
-        # CI 测试以显式 kb_ids 指定该库，不受影响。
-        kb.is_active = False
+        db.commit()
+    # 入库（ingest_text -> get_kb）要求 is_active=True，故入库阶段必须保持活跃。
+    # 评测专用 KB 在文档全部入库完成后，再统一置为非活跃（见函数末尾），
+    # 避免参与生产检索与默认评测范围；CI 测试以显式 kb_ids 指定该库，不受影响。
+    if not kb.is_active:
+        kb.is_active = True
         db.commit()
 
     items: List[Dict] = []
@@ -215,6 +218,9 @@ async def seed_eval_corpus(db: Session, tenant_id: str = "default",
                 "note": f"CI 自包含: {d.get('title')}",
             })
 
+    # 入库完成：评测专用 KB 置为非活跃，避免参与生产检索与默认评测范围。
+    kb.is_active = False
+    db.commit()
     logger.info("CI 评测语料就绪 | kb=%s | 文档=%d | 查询=%d",
                 kb.id, len(data.get("documents", [])), len(items))
     return {"version": 1, "tenant_id": tenant_id, "items": items, "_kb_id": kb.id}
