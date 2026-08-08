@@ -150,3 +150,30 @@ docker exec terraforge python /tmp/restore_redis.py \
 ```
 
 > 注意：Redis 备份只覆盖 `tf:` 前缀键，恢复不会影响 KnowForge 的其它 Redis 数据。
+
+---
+
+## 5. 前端页面托管（关键）
+
+**现象**：浏览器打开 `https://<host>/` 看到一段 JSON（`{"app":"TerraForge...","docs":"/docs",...}`），而不是 Vue 页面。
+
+**根因**：`backend/Dockerfile` 只拷贝后端代码，**从不构建/拷贝 `frontend/dist`**。容器内无 `/app/frontend` → `app/main.py` 的 `FRONTEND_DIST` 不存在 → 走兜底分支，`GET /` 返回 JSON 信息页而非 SPA。
+
+**修复（已落地）**：`docker-compose.yml` 的 `web` 服务挂载宿主前端产物：
+
+```yaml
+volumes:
+  - ./frontend/dist:/app/frontend/dist:ro   # 检测到即由 uvicorn 托管 SPA
+```
+
+`docker compose up -d web` 生效，**无需重建镜像、VM 无需安装 Node**。
+
+**重部署注意**：`frontend/dist/` 已被 `.gitignore` 忽略，全新环境须先在 VM 构建再启动：
+
+```bash
+cd /root/terraforge/frontend && pnpm install && pnpm build   # 产出 dist/
+cd /root/terraforge && docker compose up -d web
+```
+
+> 前端 API 基址为相对路径 `/api/v1`，nginx `location /api/` 已反代到 `web:8001`，无需额外配置。
+> SPA history 路由回退由 `app/main.py` 的 `spa_fallback` 处理（`/api`、`/docs`、`/health` 等保留路径除外）。
