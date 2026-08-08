@@ -53,8 +53,8 @@ class QualityReportOut(BaseModel):
     issue_counts: dict = {}
     issues: List[QualityIssue] = []
     suggestions: List[str] = []
-    vector_health: dict = {}          # Sprint8：向量质量体检摘要
-    coverage: dict = {}               # Sprint8：域覆盖分布与稀疏域
+    vector_health: Optional[dict] = None   # Sprint8：向量质量体检摘要（早期快照可能为 NULL）
+    coverage: Optional[dict] = None        # Sprint8：域覆盖分布与稀疏域（早期快照可能为 NULL）
     isolated_queries: List[dict] = []  # Sprint8：零召回的孤立查询（仅本次响应，不落库）
     created_at: Optional[datetime] = None
 
