@@ -54,7 +54,7 @@ def _unauthorized(detail: str) -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail=detail,
-        headers={"WWW-Authenticate": f"ApiKey realm=\"terraforge\""},
+        headers={"WWW-Authenticate": "ApiKey realm=\"terraforge\""},
     )
 
 

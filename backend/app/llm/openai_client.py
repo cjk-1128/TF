@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import AsyncIterator, List
+from typing import AsyncIterator, List, Optional
 
 import httpx
 

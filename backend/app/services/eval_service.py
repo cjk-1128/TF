@@ -119,7 +119,6 @@ async def run_evaluation(db: Session, tenant_id: str = "default",
     pos = [p for p in per_query if not p["negative"]]
     neg = [p for p in per_query if p["negative"]]
     n_pos = max(1, len(pos))
-    n = max(1, len(per_query))
 
     agg_recall = {k: round(sum(p["delivered_metrics"]["recall"][k] for p in pos) / n_pos, 4)
                   for k in ks}

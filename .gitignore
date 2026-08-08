@@ -31,3 +31,10 @@ frontend/dist/
 .DS_Store
 .idea/
 .vscode/
+
+# ===== Phase 6 自签名 TLS 证书（含私钥，禁止提交）=====
+nginx/ssl/
+*.crt
+*.key
+!*.example.crt
+!*.example.key

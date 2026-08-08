@@ -16,9 +16,12 @@ import re
 from typing import AsyncIterator, List
 
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.llm.base import (BaseEmbedding, BaseLLM, BaseReranker, ChatMessage,
                           LLMResult)
 from app.utils.text import tokenize
+
+logger = get_logger(__name__)
 
 _TOKEN_RE = re.compile(r"[\u4e00-\u9fa5]+|[a-zA-Z]+|\d+(?:\.\d+)*")
 

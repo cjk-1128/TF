@@ -394,18 +394,6 @@ class KnowledgeService:
         except Exception as e:  # noqa: BLE001
             logger.warning("BM25 清理失败: %s", e)
 
-    def list_chunks(self, doc_id: str, offset: int = 0, limit: int = 50,
-                    keyword: str = ""):
-        q = self.db.query(Chunk).filter(Chunk.doc_id == doc_id)
-        if keyword:
-            like = f"%{keyword}%"
-            q = q.filter(or_(Chunk.content.like(like),
-                             Chunk.section_path.like(like),
-                             Chunk.clause_no.like(like)))
-        total = q.count()
-        items = q.order_by(Chunk.seq).offset(offset).limit(limit).all()
-        return items, total
-
     async def reindex_document(self, doc_id: str) -> Document:
         """重建单文档索引（切分策略或 Embedding 模型变更后使用）。"""
         doc = self.get_document(doc_id)

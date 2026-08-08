@@ -38,4 +38,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
 EXPOSE 8001
 
 # 用 `python -m uvicorn` 而非 venv bin 入口，规避 venv 路径问题（site-packages 直接挂 PYTHONPATH）
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
+# Phase 6：--proxy-headers + --forwarded-allow-ips=* 使 uvicorn 信任 nginx 转发的
+# X-Forwarded-For/Proto，从而正确识别真实客户端 IP 与 HTTPS 协议（自签名下 scheme=https）。
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001", \
+     "--proxy-headers", "--forwarded-allow-ips=*"]

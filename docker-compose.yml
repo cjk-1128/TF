@@ -2,14 +2,14 @@
 #
 # Phase 1 数据底座（复用 KnowForge 容器，隔离方式）：
 # - MySQL 8.4   → 新建独立库 `terraforge`（不碰 KnowForge 的 subjects_kg）
-# - Milvus      → 集合用 `tf_chunks` 前缀命名空间（不碰 KnowForge 集合）
-# - Redis 7.4   → 用 DB 1（`redis://.../1`）隔离
+# - Milvus      → 集合用 `tf_kb_{kb_id}` 前缀命名空间（不碰 KnowForge 集合）
+# - Redis 7.4   → 用 DB 1（`redis://.../1`，`tf:` 前缀）隔离
 # 容器经 host.docker.internal 访问宿主服务（extra_hosts 注入网关），无需新建基础设施容器。
 #
 # 说明：
 # - build context 为项目根，dockerfile 指向 backend/Dockerfile，COPY 以 backend/ 为基准。
-# - 端口 8002:8001：宿主机 8002 避开 systemd 现有 8001 与 KnowForge 8000，便于并行验证不破坏生产服务。
-#   正式切换时把 "8002:8001" 改为 "8001:8001" 并停掉 systemd 服务即可。
+# - Phase 6 生产加固：应用容器(web)不再直连宿主端口，统一经 nginx 反代（80→443 跳转 + TLS 终止）。
+#   外部访问入口为宿主 80/443；如需临时回退直连，把 web.ports 改回 "8002:8001" 并移除 nginx 依赖即可。
 # - 使用 bind 挂载（而非命名卷）保留 SQLite 评测库与本地向量，作为迁移源与 BM25 索引（BM25 仍走本地）。
 
 services:
@@ -39,16 +39,41 @@ services:
       LOG_FORMAT: json
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    ports:
-      - "8002:8001"
+    # Phase 6：不再直连宿主端口，仅由同 compose 网络内的 nginx 通过 web:8001 访问
+    # 如需临时回退直连调试，取消下一行注释：
+    # ports:
+    #   - "8002:8001"
     volumes:
       - ./docker_data:/app/data
       - ./docker_logs:/app/logs
       - ./docker_vector:/app/vectorstore
+      # Phase 6 修复：挂载已构建的前端产物（VM 上 frontend/dist 已存在），
+      # 使 uvicorn 托管 Vue SPA；否则 / 只会返回 JSON 信息页。
+      - ./frontend/dist:/app/frontend/dist:ro
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8001/health',timeout=3).status==200 else 1)"]
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8001/ping',timeout=3).status==200 else 1)"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 40s
+
+  # Phase 6 生产加固：TLS 终止 + 反代 + 安全头 + 限速
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: terraforge-nginx
+    restart: unless-stopped
+    depends_on:
+      - web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/terraforge.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f -s -o /dev/null http://127.0.0.1/nginx_health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

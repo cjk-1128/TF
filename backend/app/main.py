@@ -1,6 +1,7 @@
 """TerraForge 应用入口。"""
 from __future__ import annotations
 
+import asyncio
 import os
 import time
 from contextlib import asynccontextmanager
@@ -109,12 +110,33 @@ async def trace_middleware(request: Request, call_next):
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 
 
-@app.get("/health", tags=["系统"], summary="健康检查")
+@app.get("/ping", tags=["系统"], summary="存活探针（瞬时、不依赖后端）",
+          include_in_schema=False)
+async def ping():
+    """轻量存活检查，供 nginx / 容器健康检查使用；不做任何后端 I/O，瞬时返回。
+
+    避免像 /health 那样同步调用 Milvus/Redis 阻塞单 worker，进而导致探针级联超时。
+    """
+    return {"status": "ok"}
+
+
+@app.get("/health", tags=["系统"], summary="健康检查（含后端连通性，带超时保护）")
 async def health():
     from app.retrieval.bm25_index import get_bm25_index
     from app.vectorstore.factory import get_vector_store
     from app.core.cache import cache_stats, default_cache
+
+    async def _safe_count(fn, default=0):
+        # 阻塞型后端调用（pymilvus / 磁盘索引）放到线程并加超时，
+        # 即使 Milvus/Redis 抖动也不会卡死事件循环。
+        try:
+            return await asyncio.wait_for(asyncio.to_thread(fn), timeout=2.0)
+        except Exception:  # noqa: BLE001
+            return default
+
     cs = cache_stats()
+    vector_count = await _safe_count(lambda: get_vector_store().count())
+    bm25_count = await _safe_count(lambda: get_bm25_index().count())
     return {
         "status": "ok",
         "app": settings.APP_NAME,
@@ -122,8 +144,8 @@ async def health():
         "llm_provider": settings.LLM_PROVIDER,
         "embedding_provider": settings.EMBEDDING_PROVIDER,
         "vector_backend": settings.VECTOR_BACKEND,
-        "vector_count": get_vector_store().count(),
-        "bm25_count": get_bm25_index().count(),
+        "vector_count": vector_count,
+        "bm25_count": bm25_count,
         "cache": {
             "redis_enabled": settings.REDIS_ENABLED,
             "l2_connected": bool(default_cache.l2
@@ -147,10 +169,19 @@ async def metrics():
         from app.retrieval.bm25_index import get_bm25_index
         from app.vectorstore.factory import get_vector_store
         from app.core.cache import cache_stats
+
+        async def _safe_count(fn, default=0):
+            try:
+                return await asyncio.wait_for(asyncio.to_thread(fn), timeout=2.0)
+            except Exception:  # noqa: BLE001
+                return default
+
         vs = get_vector_store()
         bm = get_bm25_index()
-        app_metrics.set_gauge("terraforge_vector_count", float(vs.count()))
-        app_metrics.set_gauge("terraforge_bm25_count", float(bm.count()))
+        app_metrics.set_gauge("terraforge_vector_count",
+                              float(await _safe_count(lambda: vs.count())))
+        app_metrics.set_gauge("terraforge_bm25_count",
+                              float(await _safe_count(lambda: bm.count())))
         cs = cache_stats()
         l1 = float(cs.get("l1_hit", 0) or 0)
         l2 = float(cs.get("l2_hit", 0) or 0)

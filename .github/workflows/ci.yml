@@ -1,12 +1,74 @@
 name: CI
 
+# TerraForge 持续集成（Phase 6 加固）
+# - 触发：push/PR 到 main，以及手动 workflow_dispatch
+# - 全程离线（mock/hash/local），无需任何外部 API Key 或数据库
+# - 新增：lint(ruff) / 后端全量测试 / compose 配置校验 / 前端构建校验，保留评测回归
+
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+# 同一分支并发只保留最新一次，避免排队浪费
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# 最小权限原则
+permissions:
+  contents: read
 
 jobs:
+  # ------------------------------------------------------------------
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install ruff
+        run: pip install ruff
+      - name: Ruff check
+        run: ruff check .
+
+  # ------------------------------------------------------------------
+  test:
+    name: 后端测试（离线）
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+      - name: Run full test suite
+        # conftest.py 已强制临时 SQLite + mock + 关闭 Redis/巡检，整库可离线运行
+        run: python -m pytest -q
+        env:
+          LLM_PROVIDER: mock
+          EMBEDDING_PROVIDER: hash
+          RERANK_PROVIDER: cross_encoder_local
+          REDIS_ENABLED: "False"
+          VECTOR_BACKEND: local
+          QUALITY_INSPECT_ENABLED: "False"
+
+  # ------------------------------------------------------------------
   eval-regression:
     name: 评测集检索回归
     runs-on: ubuntu-latest
@@ -14,26 +76,53 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
-
       - name: Run eval regression
         run: python -m pytest tests/test_eval_regression.py -q
         env:
-          # 强制 mock 模式，无需任何外部 API Key
           LLM_PROVIDER: mock
           EMBEDDING_PROVIDER: hash
           RERANK_PROVIDER: cross_encoder_local
           REDIS_ENABLED: "False"
           QUALITY_INSPECT_ENABLED: "False"
+
+  # ------------------------------------------------------------------
+  compose-validate:
+    name: Docker Compose 配置校验
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate compose
+        # 仅校验 YAML / 变量解析，不构建镜像（镜像依赖 VM 本地 site-packages）
+        run: docker compose config -q
+
+  # ------------------------------------------------------------------
+  frontend-build:
+    name: 前端构建校验
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Enable pnpm
+        run: corepack enable
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        # 与部署 Dockerfile 保持一致：跳过 vue-tsc 类型检查，仅做 vite 生产构建，
+        # 避免存量类型误差阻断流水线（如需类型门禁可改为 `pnpm build`）。
+        run: pnpm exec vite build

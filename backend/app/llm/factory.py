@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import time
 from functools import lru_cache
+from typing import List
 
 from app.core import prom_metrics as app_metrics
 from app.core.config import settings

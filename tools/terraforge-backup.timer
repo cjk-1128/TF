@@ -1,0 +1,10 @@
+[Unit]
+Description=TerraForge 每日 02:00 自动备份
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

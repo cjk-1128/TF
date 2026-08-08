@@ -1,0 +1,9 @@
+[Unit]
+Description=TerraForge 生产数据备份
+After=docker.service docker.socket
+Requires=docker.service
+
+[Service]
+Type=oneshot
+# 备份脚本会探测 MySQL/Redis 容器并建立每日快照
+ExecStart=/bin/bash /root/terraforge/tools/backup.sh

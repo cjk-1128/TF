@@ -95,3 +95,17 @@ VECTOR_BACKEND=milvus      # 需要额外起 Milvus（compose 中已注释，按
 | 上传文件 | `/data/uploads` |
 
 请勿把索引写到镜像内目录，否则容器重建后会丢失、问答变空。
+
+---
+
+## 9. 生产现状（Phase 6 生产加固）
+
+> 本文前述步骤基于 `deploy/` 下的"多阶段 + 自带 nginx/redis"备选方案。
+> **当前生产实际采用的是仓库根 `docker-compose.yml` + `backend/Dockerfile`**，并已于 Phase 6 接入 `nginx` 反代与 TLS：
+>
+> - 应用容器 `web` 不再直连宿主端口，统一经 `nginx`（宿主 **80/443**）访问；外部入口为 `http(s)://192.168.88.100/`。
+> - 复用同机 KnowForge 的 MySQL/Milvus/Redis（底座不变），未引入额外基础设施容器。
+> - TLS 为自签名证书（`tools/gen_ssl.sh` 生成，位于 `nginx/ssl/`，已被 `.gitignore` 忽略）。
+> - 备份/恢复、CI 门禁、回滚方式见 **[PRODUCTION_HARDENING.md](./PRODUCTION_HARDENING.md)**。
+>
+> 若需走 `deploy/` 备选方案（自带 redis + 前端打进镜像），仍以 `deploy/docker-compose.yml` 为准，但生产不推荐。

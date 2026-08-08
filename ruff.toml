@@ -1,0 +1,12 @@
+# TerraForge ruff 配置（Phase 6 CI 门禁）
+# 目标：CI 仅做"正确性"门禁，不阻塞存量风格问题。
+# - F  ：pyflakes（未定义名/重复定义/未使用变量/死代码等真实缺陷）
+# - E9 ：语法错误
+# - 忽略 F401（未使用导入）：非缺陷，存量较多，不阻塞流水线
+# 注意：项目运行于 Python 3.9（镜像 python:3.9-slim），请勿改用 PEP 585 内置泛型。
+target-version = "py39"
+line-length = 100
+
+[lint]
+select = ["F", "E9"]
+ignore = ["F401"]
