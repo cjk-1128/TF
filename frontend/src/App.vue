@@ -44,7 +44,9 @@ async function loadStats() {
 
 onMounted(async () => {
   try {
-    const r = await fetch('/health')
+    // 连通性探针改用瞬时 /ping（不依赖后端 I/O），避免重型 /health 在 Milvus 负载高时
+    // 偶发耗时 > nginx 读超时 → 504 → 误判「后端未连接」。/ping 正常即代表 web 存活。
+    const r = await fetch('/ping')
     backendOk.value = r.ok
   } catch {
     backendOk.value = false
