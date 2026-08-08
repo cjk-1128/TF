@@ -212,6 +212,7 @@ async def stage3_retrieve(state: RAGState) -> RAGState:
         domains=state.domains or None,
         domain_priority=domain_priority,
         vector_weight=vw, bm25_weight=bw, score_threshold=threshold,
+        tenant_id=state.tenant_id or "",
     )
 
     # 子查询补充召回（多跳问题）
@@ -221,7 +222,8 @@ async def stage3_retrieve(state: RAGState) -> RAGState:
             extra = await retriever.retrieve(sq, top_k=max(4, top_k // 3),
                                              kb_ids=state.kb_ids or None,
                                              domains=state.domains or None,
-                                             domain_priority=domain_priority)
+                                             domain_priority=domain_priority,
+                                             tenant_id=state.tenant_id or "")
             for c in extra:
                 if c.chunk_id not in seen:
                     c.fusion_score *= 0.9  # 子查询召回降权

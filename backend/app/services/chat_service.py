@@ -143,6 +143,7 @@ class ChatService:
         # 4. 执行 Pipeline（首轮未命中缓存，或多轮始终重算）
         state = RAGState(
             query=req.query, conversation_id=conv.id, user_id=req.user_id,
+            tenant_id=tenant_id,
             kb_ids=resolved_kb_ids,
             domains=[d.value for d in req.domains],
             top_k=req.top_k,

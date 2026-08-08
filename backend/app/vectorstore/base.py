@@ -15,6 +15,7 @@ class VectorRecord:
     domain: str = ""
     discipline: str = ""
     content: str = ""
+    tenant_id: str = ""   # 多租户隔离维度（按库隔离时写入，检索可过滤）
     meta: Dict = field(default_factory=dict)
 
 
@@ -42,7 +43,10 @@ class BaseVectorStore(ABC):
                domains: Optional[List[str]] = None) -> List[VectorHit]: ...
 
     @abstractmethod
-    def delete_by_doc(self, doc_id: str) -> int: ...
+    def delete_by_doc(self, doc_id: str, kb_id: Optional[str] = None) -> int: ...
+
+    @abstractmethod
+    def delete_by_kb(self, kb_id: str, tenant_id: Optional[str] = None) -> int: ...
 
     @abstractmethod
     def count(self) -> int: ...

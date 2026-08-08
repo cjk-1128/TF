@@ -20,11 +20,12 @@ class SearchService:
     def __init__(self, db: Session):
         self.db = db
 
-    async def search(self, req: SearchRequest) -> List[RetrievedChunk]:
+    async def search(self, req: SearchRequest, tenant_id: str = "") -> List[RetrievedChunk]:
         cands = await get_retriever().retrieve(
             req.query, top_k=max(req.top_k * 3, settings.RETRIEVAL_TOP_K),
             kb_ids=req.kb_ids or None,
             domains=[d.value for d in req.domains] or None,
+            tenant_id=tenant_id or "",
         )
         if not cands:
             return []
@@ -66,7 +67,7 @@ class SearchService:
             ))
         return out
 
-    async def explain(self, req: SearchRequest) -> dict:
+    async def explain(self, req: SearchRequest, tenant_id: str = "") -> dict:
         """检索可解释性：跑通 意图路由 -> 查询改写 -> 混合检索 -> 重排序，
         返回每路打分、命中词与路由决策的明细，不经过 LLM 生成。"""
         from app.rag import stages
@@ -75,6 +76,7 @@ class SearchService:
 
         state = RAGState(
             query=req.query,
+            tenant_id=tenant_id or "",
             kb_ids=list(req.kb_ids or []),
             domains=[d.value for d in req.domains] or [],
             top_k=req.top_k,

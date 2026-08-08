@@ -39,6 +39,7 @@ class RAGState:
     query: str
     conversation_id: str = ""
     user_id: str = "anonymous"
+    tenant_id: str = ""   # 多租户隔离维度（检索向量/BM25 时按租户过滤）
     kb_ids: List[str] = field(default_factory=list)
     domains: List[str] = field(default_factory=list)
     top_k: Optional[int] = None

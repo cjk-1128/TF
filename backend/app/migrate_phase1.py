@@ -74,10 +74,14 @@ def migrate_vectors() -> None:
         "终止迁移以免假阳性。请检查 MILVUS_HOST/PORT 与 host.docker.internal 连通性。"
     )
 
-    # 干净迁移：先删旧集合再重建，避免历史未 flush / 重复 upsert 导致 count 异常（如 154）
-    if vs.client.has_collection(vs.collection):
-        vs.client.drop_collection(vs.collection)
-        log.info("已删除旧 Milvus 集合 %s（重建以保证向量数干净）", vs.collection)
+    # 干净迁移：先清掉旧集合（共享 + 既有按库集合），避免历史未 flush / 重复 upsert
+    # 导致 count 异常（如 154）。upsert 会按 kb_id 路由到独立集合（tf_kb_{kb_id}）。
+    if vs.client.has_collection(vs.shared):
+        vs.client.drop_collection(vs.shared)
+        log.info("已删除旧共享集合 %s", vs.shared)
+    for c in vs._kb_collections():
+        vs.client.drop_collection(c)
+        log.info("已删除既有按库集合 %s", c)
 
     records = []
     for i, rid in enumerate(ids):
@@ -90,6 +94,7 @@ def migrate_vectors() -> None:
             domain=m.get("domain", ""),
             discipline=m.get("discipline", ""),
             content=m.get("content", ""),
+            tenant_id=m.get("tenant_id", ""),
             meta={
                 "section_path": m.get("section_path", ""),
                 "clause_no": m.get("clause_no", ""),
@@ -102,7 +107,7 @@ def migrate_vectors() -> None:
     vs.flush()  # 强制落盘，避免 row_count 读到未落盘的 0
     cnt = vs.count()
     assert cnt == len(ids), f"Milvus 向量数 {cnt} != 期望 {len(ids)}（可能部分写入失败）"
-    log.info("Milvus 集合 %s 当前 %d 条 ✓", settings.MILVUS_COLLECTION, cnt)
+    log.info("Milvus 向量当前 %d 条（按库隔离=%s）✓", cnt, vs.isolation)
 
 
 if __name__ == "__main__":

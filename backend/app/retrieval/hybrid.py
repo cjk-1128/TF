@@ -52,7 +52,8 @@ class HybridRetriever:
                        domain_priority: Optional[List[str]] = None,
                        vector_weight: float | None = None,
                        bm25_weight: float | None = None,
-                       score_threshold: float | None = None) -> List[Candidate]:
+                       score_threshold: float | None = None,
+                       tenant_id: str = "") -> List[Candidate]:
         top_k = top_k or settings.RETRIEVAL_TOP_K
         # 允许 Intent Agent 按意图覆盖融合权重与阈值（自适应检索）
         wv = vector_weight if vector_weight is not None else settings.HYBRID_VECTOR_WEIGHT
@@ -62,8 +63,10 @@ class HybridRetriever:
         # BM25 通道候选放大：词面召回常在更深处命中（规范号/术语/错别字匹配），
         # 令其比向量通道多取 HYBRID_BM25_CANDIDATE_MULT 倍候选再参与 RRF 融合。
         bm_top_k = max(top_k, int(top_k * settings.HYBRID_BM25_CANDIDATE_MULT))
-        vec_task = asyncio.create_task(self._vector_search(query, top_k, kb_ids, domains))
-        bm_task = asyncio.to_thread(self.bm25.search, query, bm_top_k, kb_ids, domains)
+        vec_task = asyncio.create_task(
+            self._vector_search(query, top_k, kb_ids, domains, tenant_id))
+        bm_task = asyncio.to_thread(
+            self.bm25.search, query, bm_top_k, kb_ids, domains, tenant_id or None)
         vec_hits, bm_hits = await asyncio.gather(vec_task, bm_task)
 
         pool: Dict[str, Candidate] = {}
@@ -101,10 +104,12 @@ class HybridRetriever:
         return result[:top_k]
 
     async def _vector_search(self, query: str, top_k: int,
-                             kb_ids: Optional[List[str]], domains: Optional[List[str]]):
+                             kb_ids: Optional[List[str]], domains: Optional[List[str]],
+                             tenant_id: str = ""):
         try:
             qv = await self.embed.embed_query(query)
-            return await asyncio.to_thread(self.vs.search, qv, top_k, kb_ids, domains)
+            return await asyncio.to_thread(
+                self.vs.search, qv, top_k, kb_ids, domains, tenant_id or None)
         except Exception as e:  # noqa: BLE001
             logger.error("向量通道失败，仅用关键词通道: %s", e)
             return []

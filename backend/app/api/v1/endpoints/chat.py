@@ -72,7 +72,7 @@ async def search(req: SearchRequest, request: Request,
     tenant_id = get_tenant_id(request)
     # 检索范围限制在当前租户内可访问的知识库
     req.kb_ids = ChatService(db)._resolve_kb_ids(req.kb_ids, tenant_id, user)
-    items = await SearchService(db).search(req)
+    items = await SearchService(db).search(req, tenant_id=tenant_id)
     return ApiResponse.ok(items, f"命中 {len(items)} 条", get_trace_id())
 
 
@@ -82,7 +82,7 @@ async def explain(req: SearchRequest, request: Request,
                   user: User = Depends(get_current_user)):
     tenant_id = get_tenant_id(request)
     req.kb_ids = ChatService(db)._resolve_kb_ids(req.kb_ids, tenant_id, user)
-    data = await SearchService(db).explain(req)
+    data = await SearchService(db).explain(req, tenant_id=tenant_id)
     return ApiResponse.ok(data, "检索可解释性明细", get_trace_id())
 
 

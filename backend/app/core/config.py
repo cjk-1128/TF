@@ -66,7 +66,11 @@ class Settings(BaseSettings):
     MILVUS_PORT: int = 19530
     MILVUS_USER: str = ""
     MILVUS_PASSWORD: str = ""
-    MILVUS_COLLECTION: str = "terraforge_chunks"
+    MILVUS_COLLECTION: str = "terraforge_chunks"   # 共享集合（VECTOR_TENANT_ISOLATION=False 时使用）
+    MILVUS_COLLECTION_PREFIX: str = "tf_kb_"        # 按库隔离集合前缀 -> tf_kb_{kb_id}
+    # 向量索引按知识库隔离：开启后每个 KB 独立 Milvus 集合(tf_kb_{kb_id}) + BM25 按库分区，
+    # 删除知识库即 drop 整个集合/分区，根除「共享向量/BM25 索引污染」隐患（企业级生产改造）。
+    VECTOR_TENANT_ISOLATION: bool = True
     MILVUS_INDEX_TYPE: str = "HNSW"
     MILVUS_METRIC_TYPE: str = "COSINE"
     LOCAL_VECTOR_DIR: str = str(PROJECT_ROOT / "data" / "vectorstore")

@@ -75,10 +75,18 @@ class KnowledgeService:
 
     def delete_kb(self, kb_id: str) -> None:
         kb = self.get_kb(kb_id)
-        for d in list(kb.documents):
-            self._purge_indexes(d.id)
-        self.db.delete(kb)
-        logger.info("删除知识库 | %s", kb_id)
+        # 按库隔离干净擦除：直接 drop 整个向量集合 / BM25 分区，根除索引污染
+        try:
+            get_vector_store().delete_by_kb(kb_id, kb.tenant_id)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("向量库按库擦除失败(忽略): %s", e)
+        try:
+            get_bm25_index().delete_by_kb(kb_id)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("BM25 按库擦除失败(忽略): %s", e)
+        self.db.delete(kb)  # 级联删除文档与切片
+        logger.info("删除知识库(按库隔离擦除) | %s | tenant=%s",
+                    kb_id, kb.tenant_id)
 
     def refresh_kb_stats(self, kb_id: str) -> None:
         kb = self.db.query(KnowledgeBase).filter(KnowledgeBase.id == kb_id).first()
@@ -235,8 +243,8 @@ class KnowledgeService:
         records, bm_items = [], []
         for r, v in zip(rows, vectors):
             meta = {
-                "doc_id": doc.id, "kb_id": kb.id, "domain": kb.domain,
-                "discipline": doc.discipline, "content": r.content,
+                "doc_id": doc.id, "kb_id": kb.id, "tenant_id": kb.tenant_id,
+                "domain": kb.domain, "discipline": doc.discipline, "content": r.content,
                 "doc_title": doc.title, "standard_code": doc.standard_code or "",
                 "section_path": r.section_path, "clause_no": r.clause_no,
                 "page_no": r.page_no, "is_mandatory": r.is_mandatory,
@@ -244,7 +252,8 @@ class KnowledgeService:
             }
             records.append(VectorRecord(
                 id=r.id, vector=v, doc_id=doc.id, kb_id=kb.id, domain=kb.domain,
-                discipline=doc.discipline, content=r.content, meta=meta))
+                discipline=doc.discipline, content=r.content, tenant_id=kb.tenant_id,
+                meta=meta))
             bm_items.append((r.id, r.content, meta))
             r.vector_id = r.id
 
@@ -285,7 +294,7 @@ class KnowledgeService:
             {Chunk.is_deleted: True})
         d.is_deleted = True
         self.db.flush()
-        self._purge_indexes(doc_id)  # 同步移除向量/BM25，避免被检索到
+        self._purge_indexes(doc_id, d.kb_id)  # 同步移除向量/BM25，避免被检索到
         if d.file_path:
             Path(d.file_path).unlink(missing_ok=True)
         self.refresh_kb_stats(kb_id)
@@ -320,8 +329,8 @@ class KnowledgeService:
         records, bm_items = [], []
         for c, v in zip(chunks, vectors):
             meta = {
-                "doc_id": doc.id, "kb_id": doc.kb_id, "domain": kb.domain,
-                "discipline": doc.discipline, "content": c.content,
+                "doc_id": doc.id, "kb_id": doc.kb_id, "tenant_id": kb.tenant_id,
+                "domain": kb.domain, "discipline": doc.discipline, "content": c.content,
                 "doc_title": doc.title, "standard_code": doc.standard_code or "",
                 "section_path": c.section_path, "clause_no": c.clause_no,
                 "page_no": c.page_no, "is_mandatory": c.is_mandatory,
@@ -329,7 +338,8 @@ class KnowledgeService:
             }
             records.append(VectorRecord(
                 id=c.id, vector=v, doc_id=doc.id, kb_id=doc.kb_id, domain=kb.domain,
-                discipline=doc.discipline, content=c.content, meta=meta))
+                discipline=doc.discipline, content=c.content, tenant_id=kb.tenant_id,
+                meta=meta))
             bm_items.append((c.id, c.content, meta))
             c.vector_id = c.id
         vs.upsert(records)
@@ -374,9 +384,9 @@ class KnowledgeService:
                 if m.get("doc_id") == doc.id:
                     m["governance_status"] = gov
 
-    def _purge_indexes(self, doc_id: str) -> None:
+    def _purge_indexes(self, doc_id: str, kb_id: Optional[str] = None) -> None:
         try:
-            get_vector_store().delete_by_doc(doc_id)
+            get_vector_store().delete_by_doc(doc_id, kb_id)
         except Exception as e:  # noqa: BLE001
             logger.warning("向量库清理失败: %s", e)
         try:
@@ -400,7 +410,7 @@ class KnowledgeService:
         """重建单文档索引（切分策略或 Embedding 模型变更后使用）。"""
         doc = self.get_document(doc_id)
         kb = self.get_kb(doc.kb_id)
-        self._purge_indexes(doc_id)
+        self._purge_indexes(doc_id, doc.kb_id)
         self.db.query(Chunk).filter(Chunk.doc_id == doc_id).delete()
         self.db.flush()
 
