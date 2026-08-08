@@ -44,10 +44,13 @@ services:
       RBAC_ENABLED: "false"
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    # Phase 6：不再直连宿主端口，仅由同 compose 网络内的 nginx 通过 web:8001 访问
-    # 如需临时回退直连调试，取消下一行注释：
-    # ports:
-    #   - "8002:8001"
+    # Phase 6：默认仅由同 compose 网络内的 nginx 通过 web:8001 访问（80/443 入口）。
+    # 局域网其他电脑访问（VMware NAT 端口转发场景）：把 web:8001 也发布到宿主，
+    # 配合 VMware NAT 转发「宿主机:8001 -> 192.168.88.100:8001」，其他电脑即可用
+    # http://<宿主机局域网IP>:8001/ 明文打开（与 http://192.168.12.221:8001/ 同结构）。
+    # 该端口直连 web 容器（不经 nginx TLS/限速），仅建议在可信局域网使用；TLS 入口仍在 443。
+    ports:
+      - "8001:8001"
     volumes:
       - ./docker_data:/app/data
       - ./docker_logs:/app/logs
