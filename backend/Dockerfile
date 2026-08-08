@@ -24,16 +24,16 @@ COPY backend/site-packages/ /app/backend/site-packages/
 # 否则宿主 venv 里过旧的 pymysql（不认 allow_public_key_retrieval 参数）会被优先导入，
 # 导致 SQLAlchemy 连 MySQL 时抛 TypeError 而崩溃（init_db 即便走了 create_all 兜底也会炸）。
 RUN rm -rf /app/backend/site-packages/pymysql /app/backend/site-packages/cryptography && \
-    pip install --no-cache-dir --target=/app/backend/site-packages pymysql cryptography
+    pip install --no-cache-dir --target=/app/backend/site-packages pymysql cryptography redis
 
 # 复制应用代码（不含 data/logs/vectorstore，运行时用卷挂载）
 COPY backend/app /app/backend/app
 COPY backend/migrations /app/backend/migrations
 COPY backend/alembic.ini /app/backend/alembic.ini
 
-# 健康检查：slim 镜像不含 curl，用 python 探测 /health
+# 健康检查：slim 镜像不含 curl，用 python 探测 /health（用 127.0.0.1 避免 localhost 解析 IPv6 挂起）
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
-  CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8001/health',timeout=3).status==200 else 1)"
+  CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8001/health',timeout=5).status==200 else 1)"
 
 EXPOSE 8001
 

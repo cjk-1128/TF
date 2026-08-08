@@ -21,15 +21,49 @@ def get_llm() -> BaseLLM:
     return MockLLM()
 
 
+class CachedEmbedding(BaseEmbedding):
+    """Embedding 缓存装饰器：按文本维度走 L1/L2 多级缓存（app.core.cache），
+    减少重复 Embedding 推理——对真实远程 Embedding 尤其关键（避免重复网络请求）。
+    透明包裹任意 BaseEmbedding 实现，所有调用方自动受益。"""
+
+    def __init__(self, inner: BaseEmbedding, provider: str, model: str) -> None:
+        self.inner = inner
+        self.dim = inner.dim
+        self._provider = provider
+        self._model = model
+
+    async def embed_texts(self, texts: List[str]) -> List[List[float]]:
+        from app.core.cache import default_cache, embedding_cache_key
+        results: List[List[float]] = []
+        miss_idx: List[int] = []
+        for i, t in enumerate(texts):
+            cached = default_cache.get(embedding_cache_key(self._provider, self._model, t))
+            if cached is not None:
+                results.append(cached)
+            else:
+                miss_idx.append(i)
+        if miss_idx:
+            miss_texts = [texts[i] for i in miss_idx]
+            got = await self.inner.embed_texts(miss_texts)
+            for j, i in enumerate(miss_idx):
+                key = embedding_cache_key(self._provider, self._model, texts[i])
+                default_cache.set(key, got[j])
+                results.append(got[j])
+        return results
+
+
 @lru_cache
 def get_embedding() -> BaseEmbedding:
     if settings.EMBEDDING_PROVIDER == "openai_compatible" and settings.EMBEDDING_API_KEY:
         from app.llm.openai_client import OpenAICompatibleEmbedding
         logger.info("Embedding 使用 OpenAI 兼容接口 | model=%s", settings.EMBEDDING_MODEL)
-        return OpenAICompatibleEmbedding()
-    from app.llm.local_impl import HashEmbedding
-    logger.warning("Embedding 使用内置 Hash 实现（未配置 EMBEDDING_API_KEY）")
-    return HashEmbedding()
+        inner = OpenAICompatibleEmbedding()
+    else:
+        from app.llm.local_impl import HashEmbedding
+        logger.warning("Embedding 使用内置 Hash 实现（未配置 EMBEDDING_API_KEY）")
+        inner = HashEmbedding()
+    # 包裹多级缓存：检索/重排/入库所有 embedding 调用自动命中 L1/L2
+    return CachedEmbedding(inner, settings.EMBEDDING_PROVIDER, settings.EMBEDDING_MODEL)
 
 
 @lru_cache

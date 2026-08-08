@@ -65,7 +65,7 @@ class RedisCache:
                 url,
                 socket_connect_timeout=1.5,
                 socket_timeout=1.5,
-                decode_response=False,
+                decode_responses=False,
             )
             self._r.ping()
             self._ok = True
@@ -106,16 +106,37 @@ class Cache:
         self.l2: Optional[RedisCache] = None
         if settings.REDIS_ENABLED:
             self.l2 = RedisCache(settings.REDIS_URL, settings.CACHE_TTL_SECONDS)
+        # 线程安全统计（可观测）：命中/未命中计数与耗时累计
+        self._stats_lock = threading.RLock()
+        self._stats: dict = {"l1_hit": 0, "l2_hit": 0, "miss": 0,
+                             "load_ms": 0.0, "total_ms": 0.0}
+
+    def _record(self, kind: str, value: float = 1.0) -> None:
+        with self._stats_lock:
+            self._stats[kind] = self._stats.get(kind, 0) + value
+
+    def stats(self) -> dict:
+        """返回统计快照（含计算出的总查询数与命中率）。"""
+        with self._stats_lock:
+            s = dict(self._stats)
+        total = s.get("l1_hit", 0) + s.get("l2_hit", 0) + s.get("miss", 0)
+        s["total_lookups"] = total
+        s["hit_rate"] = round((s.get("l1_hit", 0) + s.get("l2_hit", 0)) / total, 4) \
+            if total else 0.0
+        return s
 
     def get(self, key: str) -> Optional[Any]:
         v = self.l1.get(key)
         if v is not None:
+            self._record("l1_hit")
             return v
         if self.l2 is not None:
             v = self.l2.get(key)
             if v is not None:
                 self.l1.set(key, v)  # 回填 L1，减少 Redis 往返
+                self._record("l2_hit")
                 return v
+        self._record("miss")
         return None
 
     def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
@@ -125,11 +146,16 @@ class Cache:
 
     def get_or_load(self, key: str, loader: Callable[[], Any],
                     ttl: Optional[int] = None) -> Any:
-        """先查缓存，未命中则调用 loader 回源并写回。"""
+        """先查缓存，未命中则调用 loader 回源并写回，并记录耗时。"""
+        t0 = time.perf_counter()
         v = self.get(key)
         if v is not None:
+            self._record("total_ms", (time.perf_counter() - t0) * 1000)
             return v
+        lt0 = time.perf_counter()
         v = loader()
+        self._record("load_ms", (time.perf_counter() - lt0) * 1000)
+        self._record("total_ms", (time.perf_counter() - t0) * 1000)
         self.set(key, v, ttl)
         return v
 
@@ -150,3 +176,15 @@ def query_cache_key(query: str, **ctx: Any) -> str:
 
 # 进程级单例（与 uvicorn worker 生命周期一致）
 default_cache: Cache = Cache()
+
+
+def cache_stats() -> dict:
+    """模块级统计快照，供 /health 等探测端点调用。"""
+    return default_cache.stats()
+
+
+def answer_cache_key(query: str, **ctx: Any) -> str:
+    """答案（管线结果）缓存键：query + 上下文参数 的 SHA256，前缀 tf:ans:。"""
+    payload = "ANS|" + query + "|" + json.dumps(ctx, sort_keys=True, ensure_ascii=False)
+    h = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return f"tf:ans:{h}"

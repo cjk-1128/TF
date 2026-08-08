@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 from datetime import datetime
+import time
 from typing import List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.constants import QueryIntent
 from app.core.exceptions import NotFoundError
 from app.core.logging import get_logger
@@ -81,6 +83,7 @@ class ChatService:
     # ==================== RAG 问答 ====================
     async def chat(self, req: ChatRequest, tenant_id: str = "default",
                    user: User | None = None) -> ChatResponse:
+        t0 = time.perf_counter()
         # 1. 会话准备
         if req.conversation_id:
             conv = self.get_conversation(req.conversation_id)
@@ -107,7 +110,37 @@ class ChatService:
         self.db.add(user_msg)
         self.db.flush()
 
-        # 3. 执行 Pipeline
+        # 3. 答案缓存（仅首轮无历史参与，避免多轮上下文串缓存）
+        #    命中后跳过 Stage0-7 全链路 + LLM，但仍走持久化（消息/引用/查询日志）。
+        ans_key = None
+        cached = None
+        first_turn = (conv.message_count or 0) == 0
+        if settings.CACHE_ANSWER_ENABLED and first_turn:
+            from app.core.cache import default_cache, answer_cache_key
+            ctx = req.context
+            ans_key = answer_cache_key(
+                req.query, tid=tenant_id,
+                kb=tuple(resolved_kb_ids),
+                dom=tuple(d.value for d in req.domains),
+                tk=req.top_k,
+                ctx=(ctx.project_name, ctx.project_type, ctx.discipline, ctx.region)
+                if ctx else ("", "", "general", ""),
+            )
+            cached = default_cache.get(ans_key)
+
+        if cached is not None:
+            resp = ChatResponse(**cached)
+            assistant = self._persist_response(
+                resp, conv, user_msg, req, tenant_id, capture_gap=False)
+            resp.conversation_id = conv.id
+            resp.message_id = assistant.id
+            # 命中缓存本应更快：回报本次实际耗时，反映缓存提速
+            resp.latency_ms = int((time.perf_counter() - t0) * 1000)
+            logger.info("答案缓存命中 | query=%s | 实际耗时%dms",
+                        truncate(req.query, 40), resp.latency_ms)
+            return resp
+
+        # 4. 执行 Pipeline（首轮未命中缓存，或多轮始终重算）
         state = RAGState(
             query=req.query, conversation_id=conv.id, user_id=req.user_id,
             kb_ids=resolved_kb_ids,
@@ -119,58 +152,8 @@ class ChatService:
         )
         state = await get_pipeline().run(state, self.db)
 
-        # 4. 助手消息 + 引用落库
-        assistant = Message(
-            conversation_id=conv.id, role="assistant", content=state.answer,
-            intent=state.intent.value, rewritten_query=state.rewritten_query,
-            confidence=state.confidence, confidence_level=state.confidence_level.value,
-            need_human_review=1 if state.need_human_review else 0,
-            latency_ms=state.latency_ms,
-            stage_trace={t.stage: {"name": t.name, "ms": t.elapsed_ms, **t.detail}
-                         for t in state.traces},
-            token_usage=state.token_usage or {},
-        )
-        self.db.add(assistant)
-        self.db.flush()
-        state.message_id = assistant.id
-
-        for c in state.citations:
-            self.db.add(Citation(
-                message_id=assistant.id, index_no=c.index_no, chunk_id=c.chunk_id,
-                doc_id=c.doc_id, doc_title=c.doc_title, standard_code=c.standard_code,
-                section_path=c.section_path, clause_no=c.clause_no, page_no=c.page_no,
-                snippet=c.snippet, score=c.score, domain=c.domain,
-            ))
-
-        conv.message_count = (conv.message_count or 0) + 2
-        conv.updated_at = datetime.utcnow()
-
-        # 4.5 治理 Agent 自动捕获知识缺口：答不上/答不准的问题沉淀为待办
-        if (state.intent != QueryIntent.CHITCHAT
-                and (not state.context_chunks
-                     or state.confidence < 0.45
-                     or state.below_relevance_floor)):
-            try:
-                from app.services.governance_service import GovernanceService
-                GovernanceService(self.db).capture_gap(
-                    query=req.query, intent=state.intent.value,
-                    domains=state.target_domains, user_id=req.user_id,
-                    confidence=state.confidence)
-            except Exception as e:  # noqa: BLE001
-                logger.warning("知识缺口自动捕获失败（不影响主流程）: %s", e)
-
-        # 5. 查询日志（Stage7 治理数据源）
-        self.db.add(QueryLog(
-            conversation_id=conv.id, user_id=req.user_id, query=req.query,
-            intent=state.intent.value, hit_count=len(state.context_chunks),
-            confidence=state.confidence,
-            answered=bool(state.context_chunks) and state.confidence > 0,
-            latency_ms=state.latency_ms,
-        ))
-        self.db.flush()
-
-        return ChatResponse(
-            conversation_id=conv.id, message_id=assistant.id, query=req.query,
+        resp = ChatResponse(
+            conversation_id=conv.id, message_id="", query=req.query,
             rewritten_query=state.rewritten_query,
             intent=state.intent.value, intent_label=state.intent.label,
             intent_confidence=state.intent_confidence,
@@ -204,6 +187,78 @@ class ChatService:
             latency_ms=state.latency_ms,
             token_usage=state.token_usage or {},
         )
+
+        assistant = self._persist_response(
+            resp, conv, user_msg, req, tenant_id, capture_gap=True, state=state)
+        resp.conversation_id = conv.id
+        resp.message_id = assistant.id
+
+        if ans_key is not None:
+            from app.core.cache import default_cache
+            try:
+                default_cache.set(ans_key, resp.model_dump(), ttl=settings.CACHE_ANSWER_TTL)
+            except Exception as e:  # noqa: BLE001
+                logger.warning("答案缓存写入失败（不影响主流程）: %s", e)
+
+        return resp
+
+    # ==================== 持久化（命中/未命中共用） ====================
+    def _persist_response(self, resp: ChatResponse, conv, user_msg, req, tenant_id,
+                          capture_gap: bool, state=None) -> Message:
+        """落库助手消息 + 引用 + 查询日志（缓存命中与未命中共用）。
+
+        capture_gap=True 时（仅未命中分支）触发治理 Agent 自动捕获知识缺口；
+        命中分支跳过，避免同一问题重复生成待办。state 为 None 时（命中分支）
+        用 resp.retrieved 数量近似 hit_count。
+        """
+        assistant = Message(
+            conversation_id=conv.id, role="assistant", content=resp.answer,
+            intent=resp.intent, rewritten_query=resp.rewritten_query,
+            confidence=resp.confidence, confidence_level=resp.confidence_level,
+            need_human_review=1 if resp.need_human_review else 0,
+            latency_ms=resp.latency_ms,
+            stage_trace={t.stage: {"name": t.name, "ms": t.elapsed_ms, **t.detail}
+                         for t in resp.stage_traces},
+            token_usage=resp.token_usage or {},
+        )
+        self.db.add(assistant)
+        self.db.flush()
+
+        for c in resp.citations:
+            self.db.add(Citation(
+                message_id=assistant.id, index_no=c.index_no, chunk_id=c.chunk_id,
+                doc_id=c.doc_id, doc_title=c.doc_title, standard_code=c.standard_code,
+                section_path=c.section_path, clause_no=c.clause_no, page_no=c.page_no,
+                snippet=c.snippet, score=c.score, domain=c.domain,
+            ))
+
+        conv.message_count = (conv.message_count or 0) + 2
+        conv.updated_at = datetime.utcnow()
+
+        if capture_gap and state is not None:
+            if (state.intent != QueryIntent.CHITCHAT
+                    and (not state.context_chunks
+                         or state.confidence < 0.45
+                         or state.below_relevance_floor)):
+                try:
+                    from app.services.governance_service import GovernanceService
+                    GovernanceService(self.db).capture_gap(
+                        query=req.query, intent=state.intent.value,
+                        domains=state.target_domains, user_id=req.user_id,
+                        confidence=state.confidence)
+                except Exception as e:  # noqa: BLE001
+                    logger.warning("知识缺口自动捕获失败（不影响主流程）: %s", e)
+
+        hit_count = len(state.context_chunks) if state is not None else len(resp.retrieved)
+        self.db.add(QueryLog(
+            conversation_id=conv.id, user_id=req.user_id, query=req.query,
+            intent=resp.intent, hit_count=hit_count,
+            confidence=resp.confidence,
+            answered=bool(hit_count) and resp.confidence > 0,
+            latency_ms=resp.latency_ms,
+        ))
+        self.db.flush()
+        return assistant
 
     # ==================== 反馈 ====================
     def add_feedback(self, message_id: str, rating: int, reason: str = "",

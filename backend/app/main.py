@@ -92,6 +92,8 @@ app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 async def health():
     from app.retrieval.bm25_index import get_bm25_index
     from app.vectorstore.factory import get_vector_store
+    from app.core.cache import cache_stats, default_cache
+    cs = cache_stats()
     return {
         "status": "ok",
         "app": settings.APP_NAME,
@@ -101,6 +103,15 @@ async def health():
         "vector_backend": settings.VECTOR_BACKEND,
         "vector_count": get_vector_store().count(),
         "bm25_count": get_bm25_index().count(),
+        "cache": {
+            "redis_enabled": settings.REDIS_ENABLED,
+            "l2_connected": bool(default_cache.l2
+                                 and getattr(default_cache.l2, "_ok", False)),
+            "l1_hit": cs.get("l1_hit", 0),
+            "l2_hit": cs.get("l2_hit", 0),
+            "miss": cs.get("miss", 0),
+            "hit_rate": cs.get("hit_rate", 0.0),
+        },
     }
 
 

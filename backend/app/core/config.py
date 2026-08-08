@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     REDIS_ENABLED: bool = False
     CACHE_TTL_SECONDS: int = 3600
+    # 答案（管线结果）缓存：对完全相同的首轮问题直接复用上次计算结果，
+    # 跳过 Stage0-7 全链路 + LLM 调用。多轮对话（带历史）不参与，避免上下文串缓存。
+    CACHE_ANSWER_ENABLED: bool = True
+    CACHE_ANSWER_TTL: int = 3600
 
     # ---------------- 向量库 ----------------
     # milvus | local  (local = 内置轻量向量库，便于零依赖运行与测试)
