@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_DIR: str = str(PROJECT_ROOT / "logs")
     LOG_RETENTION_DAYS: int = 14
+    # 日志格式：text（默认，管道分隔）或 json（结构化，便于采集）
+    LOG_FORMAT: str = "text"
 
     # ---------------- 数据库 ----------------
     # 生产: mysql+pymysql://user:pwd@host:3306/terraforge?charset=utf8mb4

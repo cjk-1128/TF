@@ -6,9 +6,11 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from app.core import prom_metrics as app_metrics
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.llm.factory import get_embedding
@@ -55,6 +57,7 @@ class HybridRetriever:
                        score_threshold: float | None = None,
                        tenant_id: str = "") -> List[Candidate]:
         top_k = top_k or settings.RETRIEVAL_TOP_K
+        _t0 = time.perf_counter()
         # 允许 Intent Agent 按意图覆盖融合权重与阈值（自适应检索）
         wv = vector_weight if vector_weight is not None else settings.HYBRID_VECTOR_WEIGHT
         wb = bm25_weight if bm25_weight is not None else settings.HYBRID_BM25_WEIGHT
@@ -101,6 +104,11 @@ class HybridRetriever:
         result = [c for c in result if c.fusion_score >= threshold]
         logger.info("混合检索 | 向量%d 关键词%d 融合后%d | 策略 wv=%.2f wb=%.2f th=%.2f",
                     len(vec_hits), len(bm_hits), len(result), wv, wb, threshold)
+        try:
+            app_metrics.observe("terraforge_retrieval_duration_seconds",
+                                time.perf_counter() - _t0)
+        except Exception:  # noqa: BLE001
+            pass
         return result[:top_k]
 
     async def _vector_search(self, query: str, top_k: int,

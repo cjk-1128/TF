@@ -1,8 +1,10 @@
 """LLM / Embedding / Reranker 工厂：按配置切换实现，单例缓存。"""
 from __future__ import annotations
 
+import time
 from functools import lru_cache
 
+from app.core import prom_metrics as app_metrics
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.llm.base import BaseEmbedding, BaseLLM, BaseReranker
@@ -15,10 +17,38 @@ def get_llm() -> BaseLLM:
     if settings.LLM_PROVIDER == "openai_compatible" and settings.LLM_API_KEY:
         from app.llm.openai_client import OpenAICompatibleLLM
         logger.info("LLM 使用 OpenAI 兼容接口 | model=%s", settings.LLM_MODEL)
-        return OpenAICompatibleLLM()
-    from app.llm.local_impl import MockLLM
-    logger.warning("LLM 使用内置抽取式实现（未配置 LLM_API_KEY）")
-    return MockLLM()
+        inner = OpenAICompatibleLLM()
+    else:
+        from app.llm.local_impl import MockLLM
+        logger.warning("LLM 使用内置抽取式实现（未配置 LLM_API_KEY）")
+        inner = MockLLM()
+    # 包裹计时：透明采集 LLM 生成(chat)耗时，不改动任何调用方
+    return TimedLLM(inner)
+
+
+class TimedLLM(BaseLLM):
+    """LLM 耗时埋点装饰器：包裹 chat()，计时写入 metrics。
+
+    对 stream() 也计时首包；但本期仅 chat 走统一埋点（/chat 走 chat）。
+    """
+
+    def __init__(self, inner: BaseLLM) -> None:
+        self.inner = inner
+
+    async def chat(self, messages, *, temperature=None, max_tokens=None):
+        t0 = time.perf_counter()
+        try:
+            return await self.inner.chat(
+                messages, temperature=temperature, max_tokens=max_tokens)
+        finally:
+            try:
+                app_metrics.observe("terraforge_llm_duration_seconds",
+                                    time.perf_counter() - t0)
+            except Exception:  # noqa: BLE001
+                pass
+
+    async def stream(self, messages, *, temperature=None):
+        return await self.inner.stream(messages, temperature=temperature)
 
 
 class CachedEmbedding(BaseEmbedding):
@@ -44,7 +74,15 @@ class CachedEmbedding(BaseEmbedding):
                 miss_idx.append(i)
         if miss_idx:
             miss_texts = [texts[i] for i in miss_idx]
-            got = await self.inner.embed_texts(miss_texts)
+            t0 = time.perf_counter()
+            try:
+                got = await self.inner.embed_texts(miss_texts)
+            finally:
+                try:
+                    app_metrics.observe("terraforge_embedding_duration_seconds",
+                                        time.perf_counter() - t0)
+                except Exception:  # noqa: BLE001
+                    pass
             for j, i in enumerate(miss_idx):
                 key = embedding_cache_key(self._provider, self._model, texts[i])
                 default_cache.set(key, got[j])

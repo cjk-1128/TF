@@ -8,13 +8,14 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
-from app.core.logging import get_logger, new_trace_id, setup_logging
+from app.core.logging import get_logger, new_trace_id, set_tenant_id, setup_logging
+from app.core import prom_metrics as app_metrics
 from app.db.session import init_db
 
 setup_logging()
@@ -74,14 +75,34 @@ register_exception_handlers(app)
 @app.middleware("http")
 async def trace_middleware(request: Request, call_next):
     tid = new_trace_id()
+    # 注入租户上下文（供 JSON 日志携带 tenant 字段）
+    tenant = request.headers.get("X-Tenant-Id") or settings.DEFAULT_TENANT_ID
+    set_tenant_id(tenant)
     start = time.perf_counter()
     response = await call_next(request)
-    cost = int((time.perf_counter() - start) * 1000)
+    cost = time.perf_counter() - start
+    ms = int(cost * 1000)
     response.headers["X-Trace-Id"] = tid
-    response.headers["X-Process-Time-Ms"] = str(cost)
-    if not request.url.path.startswith(("/docs", "/openapi", "/static", "/assets")):
-        logger.info("%s %s -> %d | %dms", request.method, request.url.path,
-                    response.status_code, cost)
+    response.headers["X-Process-Time-Ms"] = str(ms)
+    path = request.url.path
+    # 指标埋点：跳过文档/静态/指标自身路径，避免自递归与噪声
+    if not path.startswith(("/docs", "/openapi", "/static", "/assets", "/metrics")):
+        try:
+            route = request.scope.get("route")
+            label = route.path if route is not None else path
+            app_metrics.inc_counter(
+                "terraforge_requests_total", 1.0,
+                {"method": request.method, "path": label,
+                 "status": str(response.status_code)},
+            )
+            app_metrics.observe(
+                "terraforge_request_duration_seconds", cost, {"path": label},
+            )
+        except Exception:  # 埋点失败绝不阻断请求
+            pass
+        if not path.startswith(("/docs", "/openapi", "/static", "/assets")):
+            logger.info("%s %s -> %d | %dms", request.method, path,
+                        response.status_code, ms)
     return response
 
 
@@ -113,6 +134,35 @@ async def health():
             "hit_rate": cs.get("hit_rate", 0.0),
         },
     }
+
+
+@app.get("/metrics", tags=["系统"], summary="Prometheus 指标", include_in_schema=False)
+async def metrics():
+    """进程内指标，Prometheus exposition 文本格式（无外部依赖）。
+
+    暴露：请求计数/耗时、检索/Embedding/LLM 耗时分布、缓存命中率、向量/BM25 条数。
+    仅聚合数值，无租户级明细，故无需鉴权（与 /health 一致）。
+    """
+    try:
+        from app.retrieval.bm25_index import get_bm25_index
+        from app.vectorstore.factory import get_vector_store
+        from app.core.cache import cache_stats
+        vs = get_vector_store()
+        bm = get_bm25_index()
+        app_metrics.set_gauge("terraforge_vector_count", float(vs.count()))
+        app_metrics.set_gauge("terraforge_bm25_count", float(bm.count()))
+        cs = cache_stats()
+        l1 = float(cs.get("l1_hit", 0) or 0)
+        l2 = float(cs.get("l2_hit", 0) or 0)
+        miss = float(cs.get("miss", 0) or 0)
+        app_metrics.set_gauge("terraforge_cache_hits_total", l1 + l2)
+        app_metrics.set_gauge("terraforge_cache_misses_total", miss)
+        app_metrics.set_gauge("terraforge_cache_hit_rate",
+                              float(cs.get("hit_rate", 0.0) or 0.0))
+    except Exception:  # 指标采集失败不影响返回既有计数
+        pass
+    return Response(app_metrics.render_prometheus(),
+                    media_type="text/plain; version=0.0.4")
 
 
 # ---------------- 前端静态托管 ----------------

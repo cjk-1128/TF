@@ -35,6 +35,8 @@ services:
       LOCAL_VECTOR_DIR: /app/vectorstore
       LOG_DIR: /app/logs
       UPLOAD_DIR: /app/data/uploads
+      # Phase 4 可观测性：结构化 JSON 日志（便于采集）；本地开发改回 text
+      LOG_FORMAT: json
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
