@@ -1,12 +1,16 @@
-# TerraForge 容器编排（Phase 0：仅 web，SQLite 卷持久化）
-# Phase 1+ 将按需接入 MySQL+Milvus+Redis（复用同机 KnowForge 容器底座，不再新建 PG）。
+# TerraForge 容器编排（Phase 1：web + 复用同机 KnowForge 容器底座 MySQL/Milvus/Redis）
+#
+# Phase 1 数据底座（复用 KnowForge 容器，隔离方式）：
+# - MySQL 8.4   → 新建独立库 `terraforge`（不碰 KnowForge 的 subjects_kg）
+# - Milvus      → 集合用 `tf_chunks` 前缀命名空间（不碰 KnowForge 集合）
+# - Redis 7.4   → 用 DB 1（`redis://.../1`）隔离
+# 容器经 host.docker.internal 访问宿主服务（extra_hosts 注入网关），无需新建基础设施容器。
 #
 # 说明：
 # - build context 为项目根，dockerfile 指向 backend/Dockerfile，COPY 以 backend/ 为基准。
 # - 端口 8002:8001：宿主机 8002 避开 systemd 现有 8001 与 KnowForge 8000，便于并行验证不破坏生产服务。
 #   正式切换时把 "8002:8001" 改为 "8001:8001" 并停掉 systemd 服务即可。
-# - 使用 bind 挂载（而非命名卷）便于从现有 8001 库预填 77-chunk 评测数据与向量索引到 docker_data/docker_vector，
-#   从而让容器化实例独立运行且能跑通 verify_sprintC（vector_count==77）。三个目录均为新建，与 systemd 数据隔离。
+# - 使用 bind 挂载（而非命名卷）保留 SQLite 评测库与本地向量，作为迁移源与 BM25 索引（BM25 仍走本地）。
 
 services:
   web:
@@ -18,11 +22,21 @@ services:
     env_file:
       - .env
     environment:
-      # 容器内 config.py 默认已指向 /app/data，这里显式声明以保持清晰
-      DATABASE_URL: sqlite:////app/data/terraforge.db
+      # ===== Phase 1：生产数据底座（复用同机 KnowForge 容器，经 host.docker.internal 访问宿主）=====
+      # 注意：含 & : @ 的 URL 必须加引号，否则 YAML 会把 & 解析为锚点导致值被置空
+      DATABASE_URL: "mysql+pymysql://root:root123@host.docker.internal:13307/terraforge?charset=utf8mb4"
+      VECTOR_BACKEND: milvus
+      MILVUS_HOST: host.docker.internal
+      MILVUS_PORT: "19530"
+      MILVUS_COLLECTION: tf_chunks
+      REDIS_ENABLED: "true"
+      REDIS_URL: "redis://host.docker.internal:6379/1"
+      # ===== 本地兜底 / 路径（BM25 仍走本地 pkl）=====
       LOCAL_VECTOR_DIR: /app/vectorstore
       LOG_DIR: /app/logs
       UPLOAD_DIR: /app/data/uploads
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8002:8001"
     volumes:

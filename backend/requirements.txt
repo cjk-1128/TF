@@ -20,3 +20,6 @@ python-docx>=1.1
 openpyxl>=3.1
 # 文件上传（FastAPI UploadFile）
 python-multipart>=0.0.9
+# Phase 1 生产数据底座：MySQL 驱动 + MySQL 8 caching_sha2 认证所需的 RSA 公钥交换
+pymysql>=1.1
+cryptography>=42

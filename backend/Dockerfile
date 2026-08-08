@@ -11,13 +11,20 @@ FROM python:3.9-slim
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONPATH=/app/backend/site-packages
+    PYTHONPATH=/app/backend:/app/backend/site-packages
 
 WORKDIR /app/backend
 
 # 复用宿主 venv 的 site-packages（由部署脚本从 /root/terraforge/backend/.venv/lib/python3.9/site-packages
 # 预置到 backend/site-packages）。包含全部依赖（fastapi/sqlalchemy/alembic/langgraph/pymilvus 等）。
 COPY backend/site-packages/ /app/backend/site-packages/
+
+# Phase 1 新增 MySQL 驱动（小体积纯 Python 包，即便宿主 venv 缺也从此补齐；cryptography 用于 MySQL 8 caching_sha2 公钥交换）。
+# 关键：必须装进 PYTHONPATH 优先的 /app/backend/site-packages 并先删除宿主拷贝的旧版 pymysql ——
+# 否则宿主 venv 里过旧的 pymysql（不认 allow_public_key_retrieval 参数）会被优先导入，
+# 导致 SQLAlchemy 连 MySQL 时抛 TypeError 而崩溃（init_db 即便走了 create_all 兜底也会炸）。
+RUN rm -rf /app/backend/site-packages/pymysql /app/backend/site-packages/cryptography && \
+    pip install --no-cache-dir --target=/app/backend/site-packages pymysql cryptography
 
 # 复制应用代码（不含 data/logs/vectorstore，运行时用卷挂载）
 COPY backend/app /app/backend/app

@@ -120,7 +120,16 @@ class MilvusVectorStore(BaseVectorStore):
             logger.warning("Milvus 删除失败: %s", e)
             return 0
 
+    def flush(self) -> None:
+        """强制落盘，确保 get_collection_stats / 检索统计反映最新写入。"""
+        try:
+            self.client.flush(self.collection)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Milvus flush 失败(忽略): %s", e)
+
     def count(self) -> int:
+        # upsert 后数据未落盘时 row_count 会读到旧值(0)，先 flush 保证统计准确
+        self.flush()
         try:
             stats = self.client.get_collection_stats(self.collection)
             return int(stats.get("row_count", 0))
