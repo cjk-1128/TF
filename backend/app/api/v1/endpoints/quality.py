@@ -15,6 +15,7 @@ from app.core.logging import get_trace_id
 from app.core.security import get_current_user, get_tenant_id
 from app.db.session import get_db
 from app.models.identity import User
+from app.models.quality import QualityReport
 from app.schemas.common import ApiResponse, PageData
 from app.schemas.governance import GovernanceTaskOut
 from app.schemas.quality import (AlertResolveRequest, QualityAlertOut,
@@ -22,7 +23,8 @@ from app.schemas.quality import (AlertResolveRequest, QualityAlertOut,
                                   QualityReportOut, QualityReportSummary,
                                   QualityScheduleRequest, ScheduleRunResult,
                                   ScoreTrendSeries)
-from app.services.alert_service import (build_score_trend, delete_alert,
+from app.services.alert_service import (auto_create_tasks_from_report,
+                                         build_score_trend, delete_alert,
                                          get_alert, list_alerts, resolve_alert,
                                          run_scheduled_inspection)
 from app.services.quality_service import QualityInspector
@@ -94,7 +96,7 @@ def convert_issue(payload: QualityIssueConvert, db: Session = Depends(get_db)):
 async def schedule_trigger(payload: QualityScheduleRequest, request: Request,
                            db: Session = Depends(get_db)):
     tenant_id = get_tenant_id(request)
-    report_result, alerts = await run_scheduled_inspection(
+    report_result, alerts, tasks = await run_scheduled_inspection(
         db, tenant_id, kb_id=payload.kb_id or None,
         score_threshold=payload.score_threshold,
         new_high_threshold=payload.new_high_threshold,
@@ -103,16 +105,40 @@ async def schedule_trigger(payload: QualityScheduleRequest, request: Request,
         max_chunk_chars=payload.max_chunk_chars,
         min_chunk_chars=payload.min_chunk_chars,
         run_recall_probe=payload.run_recall_probe,
+        auto_create_tasks=payload.auto_create_tasks,
     )
     result = ScheduleRunResult(
         report=QualityReportOut(**report_result),
         alerts=[QualityAlertOut.model_validate(a) for a in alerts],
+        tasks=[GovernanceTaskOut.model_validate(t) for t in tasks],
         score_threshold=payload.score_threshold,
         new_high_threshold=payload.new_high_threshold,
     )
     msg = (f"巡检完成，质量分 {report_result['score']:.1f}"
-           + (f"，触发 {len(alerts)} 条告警" if alerts else "，未触发告警"))
+           + (f"，触发 {len(alerts)} 条告警" if alerts else "，未触发告警")
+           + (f"，自动生成 {len(tasks)} 个治理任务" if tasks else ""))
     return ApiResponse.ok(result, msg, get_trace_id())
+
+
+@router.post("/alerts/{alert_id}/create-tasks",
+             response_model=ApiResponse[List[GovernanceTaskOut]],
+             summary="为告警补建治理任务（闭环：告警→治理任务）")
+def create_tasks_for_alert(alert_id: str, db: Session = Depends(get_db)):
+    """对历史告警补建治理任务：取该告警关联的报告快照，把其中的高危问题转成任务，\
+    并回填 source_alert_id 形成「告警↔任务」关联。"""
+    al = get_alert(db, alert_id)
+    if not al:
+        raise NotFoundError(f"告警不存在: {alert_id}")
+    report = (db.query(QualityReport)
+              .filter(QualityReport.id == al.report_id).first())
+    issues = report.issues if report and report.issues else []
+    report_result = {"id": al.report_id, "issues": issues,
+                     "kb_id": al.kb_id, "tenant_id": al.tenant_id}
+    tasks = auto_create_tasks_from_report(
+        db, report_result, source_alert_id=alert_id)
+    return ApiResponse.ok(
+        [GovernanceTaskOut.model_validate(t) for t in tasks],
+        f"已为告警生成 {len(tasks)} 个治理任务", get_trace_id())
 
 
 @router.get("/alerts", response_model=ApiResponse[PageData[QualityAlertOut]],

@@ -16,6 +16,8 @@ class GovernanceTaskCreate(BaseModel):
     priority: str = "medium"
     assignee: str = ""
     watchers: List[str] = []
+    source_alert_id: str = ""
+    source_report_id: str = ""
     due_date: Optional[datetime] = None
 
 
@@ -39,6 +41,8 @@ class GovernanceTaskOut(BaseModel):
     status: str = "open"
     assignee: str = ""
     watchers: List[str] = []
+    source_alert_id: str = ""
+    source_report_id: str = ""
     due_date: Optional[datetime] = None
     created_at: Optional[datetime] = None
 

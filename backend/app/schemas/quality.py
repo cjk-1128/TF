@@ -6,6 +6,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.governance import GovernanceTaskOut
+
 
 class QualityIssue(BaseModel):
     """单条质量问题。"""
@@ -99,6 +101,7 @@ class QualityScheduleRequest(BaseModel):
     max_chunk_chars: int = Field(1200, ge=200, le=8000)
     min_chunk_chars: int = Field(40, ge=1, le=500)
     run_recall_probe: bool = Field(True, description="是否跑黄金集低召回意图探针")
+    auto_create_tasks: bool = Field(False, description="高危问题自动生成治理任务（闭环）")
 
 
 class QualityAlertOut(BaseModel):
@@ -129,9 +132,10 @@ class AlertResolveRequest(BaseModel):
 
 
 class ScheduleRunResult(BaseModel):
-    """「立即巡检并告警」的返回：本次巡检报告 + 产生的告警。"""
+    """「立即巡检并告警」的返回：本次巡检报告 + 产生的告警 + 自动生成的治理任务。"""
     report: QualityReportOut
     alerts: List[QualityAlertOut] = []
+    tasks: List[GovernanceTaskOut] = []
     score_threshold: float = 80.0
     new_high_threshold: int = 1
 

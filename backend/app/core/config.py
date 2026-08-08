@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     CACHE_ANSWER_ENABLED: bool = True
     CACHE_ANSWER_TTL: int = 3600
 
+    # ---------------- 通知（可选） ----------------
+    # 治理任务自动创建后推送的 Webhook URL；为空则不推送（no-op）。
+    NOTIFIER_WEBHOOK_URL: str = ""
+
     # ---------------- 向量库 ----------------
     # milvus | local  (local = 内置轻量向量库，便于零依赖运行与测试)
     VECTOR_BACKEND: Literal["milvus", "local"] = "local"

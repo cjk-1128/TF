@@ -29,6 +29,10 @@ class GovernanceTask(Base):
     status = Column(String(16), default="open", comment="open/processing/done/closed")
     assignee = Column(String(64), default="", comment="维护负责人")
     watchers = Column(JSON, default=list, comment="关注人")
+    source_alert_id = Column(String(32), default="", index=True,
+                             comment="衍生自的质量巡检告警")
+    source_report_id = Column(String(32), default="", index=True,
+                              comment="衍生自的巡检报告快照")
     due_date = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

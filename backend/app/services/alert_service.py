@@ -7,13 +7,16 @@
 """
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from typing import List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
 from app.core.logging import get_logger
+from app.core.notifier import notify_task_created
 from app.models.alert import QualityAlert
+from app.models.governance import GovernanceTask
 from app.models.quality import QualityReport
 from app.schemas.quality import (QualityAlertOut, ScoreTrendPoint,
                                  ScoreTrendSeries)
@@ -23,6 +26,21 @@ logger = get_logger(__name__)
 
 # 被认定为「高危」的问题类型（质量巡检中 severity=high 的类型）。
 HIGH_SEVERITY_TYPES = {"low_recall_intent", "zero_vector", "isolated_query"}
+
+# 质量问题类型 → 治理任务类型（与 quality_service.convert_to_task 保持一致）。
+_TASK_TYPE_MAP = {
+    "duplicate_chunk": "duplicate_merge",
+    "orphan_chunk": "gap_fill",
+    "missing_standard_code": "gap_fill",
+    "missing_location": "gap_fill",
+    "oversized_chunk": "gap_fill",
+    "tiny_chunk": "gap_fill",
+    "low_recall_intent": "gap_fill",
+    "missing_vector": "gap_fill",
+    "zero_vector": "gap_fill",
+    "domain_coverage_gap": "gap_fill",
+    "isolated_query": "gap_fill",
+}
 
 
 def _high_count(issue_counts: dict) -> int:
@@ -40,10 +58,12 @@ async def run_scheduled_inspection(
     max_chunk_chars: int = 1200,
     min_chunk_chars: int = 40,
     run_recall_probe: bool = True,
-) -> Tuple[dict, List[QualityAlert]]:
-    """运行一次巡检并把快照落库，随后评估阈值产出告警。
+    auto_create_tasks: bool = False,
+    default_assignee: str = "",
+) -> Tuple[dict, List[QualityAlert], List[GovernanceTask]]:
+    """运行一次巡检并把快照落库，随后评估阈值产出告警；可选地把高危问题自动转为治理任务（闭环）。
 
-    返回 (report_result, created_alerts)。
+    返回 (report_result, created_alerts, created_tasks)。
     """
     report_result = await QualityInspector(db).inspect(
         tenant_id=tenant_id, kb_id=kb_id,
@@ -54,7 +74,11 @@ async def run_scheduled_inspection(
     alerts = evaluate_and_persist_alerts(
         db, report_result, score_threshold=score_threshold,
         new_high_threshold=new_high_threshold)
-    return report_result, alerts
+    tasks: List[GovernanceTask] = []
+    if auto_create_tasks:
+        tasks = auto_create_tasks_from_report(
+            db, report_result, default_assignee=default_assignee)
+    return report_result, alerts, tasks
 
 
 def evaluate_and_persist_alerts(
@@ -130,6 +154,58 @@ def evaluate_and_persist_alerts(
     return created
 
 
+# ---------------------------------------------------------------- 闭环：高危问题自动转治理任务
+def auto_create_tasks_from_report(db: Session, report_result: dict,
+                                  default_assignee: str = "",
+                                  source_alert_id: str = "") -> List[GovernanceTask]:
+    """把巡检报告里的高危问题自动转为治理任务（治理闭环自动化核心）。
+
+    - 仅处理 severity=="high" 且 doc_id 非空的问题（无 doc 无法定位治理对象）；
+    - 按 (task_type, doc_id) 去重，避免同一切片重复建任务；
+    - 回填 source_report_id / source_alert_id 建立「告警↔任务」关联；
+    - 若配置了 NOTIFIER_WEBHOOK_URL，创建后推送通知（失败不影响主流程）。
+    """
+    issues = report_result.get("issues") or []
+    if isinstance(issues, str):
+        try:
+            issues = json.loads(issues)
+        except Exception:
+            issues = []
+    created: List[GovernanceTask] = []
+    seen = set()
+    inspector = QualityInspector(db)
+    report_id = report_result.get("id", "")
+    for iss in issues:
+        if not isinstance(iss, dict):
+            continue
+        if iss.get("severity") != "high":
+            continue
+        doc_id = iss.get("doc_id") or ""
+        if not doc_id:
+            continue
+        issue_type = iss.get("issue_type", "")
+        task_type = _TASK_TYPE_MAP.get(issue_type, "gap_fill")
+        key = (task_type, doc_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        task = inspector.convert_to_task(
+            issue_type=issue_type, doc_id=doc_id, kb_id=iss.get("kb_id", ""),
+            title=iss.get("title") or f"[质量巡检] {issue_type}",
+            detail=iss.get("detail", ""), suggestion=iss.get("suggestion", ""),
+            assignee=default_assignee, priority="high", due_days=14)
+        task.source_report_id = report_id
+        if source_alert_id:
+            task.source_alert_id = source_alert_id
+        created.append(task)
+        notify_task_created(task, source="alert" if source_alert_id else "report")
+    if created:
+        db.commit()
+        for t in created:
+            db.refresh(t)
+    return created
+
+
 # ---------------------------------------------------------------- 告警 CRUD
 def list_alerts(db: Session, tenant_id: str = "default",
                 resolved: Optional[bool] = None,
@@ -156,6 +232,19 @@ def resolve_alert(db: Session, alert_id: str, note: str = "") -> Optional[Qualit
     al.resolved = True
     al.resolved_at = datetime.utcnow()
     al.resolve_note = note or ""
+    # 闭环：一并关闭该告警衍生的治理任务（按告警或报告关联）
+    try:
+        linked = (
+            db.query(GovernanceTask)
+            .filter((GovernanceTask.source_alert_id == alert_id) |
+                    (GovernanceTask.source_report_id == al.report_id))
+        )
+        for t in linked:
+            if t.status in ("open", "processing"):
+                t.status = "done"
+                t.updated_at = datetime.utcnow()
+    except Exception as exc:  # 关联关闭失败绝不影响告警本身
+        logger.warning("告警关联任务关闭失败（已忽略）: %s", exc)
     db.commit()
     db.refresh(al)
     return al
