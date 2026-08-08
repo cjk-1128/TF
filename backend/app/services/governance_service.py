@@ -20,6 +20,7 @@ from app.core.exceptions import NotFoundError
 from app.core.logging import get_logger
 from app.models.governance import (FeedbackRecord, GovernanceTask, KnowledgeGap,
                                     QueryLog)
+from app.models.quality import QualityReport
 from app.models.knowledge import Chunk, Document, KnowledgeBase
 from app.schemas.governance import (GovernanceTaskCreate, HealthIssue,
                                     KBHealthReport, KnowledgeGap as KnowledgeGapSchema,
@@ -431,6 +432,40 @@ class GovernanceService:
             "total_queries": total_q,
             "domain_doc_count": coverage,
             "top_gaps": top_gaps_out,
+        }
+
+    # ==================== 看板下钻 ====================
+    def dashboard_kb(self, kb_id: str) -> dict:
+        """治理看板按知识库下钻：健康分 + 问题 + 未采纳缺口 + 待办 + 质量分。"""
+        kb = self.db.query(KnowledgeBase).filter(KnowledgeBase.id == kb_id).first()
+        if not kb:
+            raise NotFoundError(f"知识库不存在: {kb_id}")
+        hr = self.health_report(kb_id)
+        gaps = (self.db.query(KnowledgeGap)
+                .filter(KnowledgeGap.suggested_kb_id == kb_id,
+                        KnowledgeGap.status == "open").all())
+        tasks, _ = self.list_tasks(kb_id=kb_id)
+        pending = sum(1 for t in tasks if t.status in ("open", "processing"))
+        rep = (self.db.query(QualityReport)
+               .filter(QualityReport.kb_id == kb_id,
+                       QualityReport.tenant_id == kb.tenant_id)
+               .order_by(QualityReport.created_at.desc()).first())
+        score = rep.score if rep else None
+        top_issues = [
+            {"issue_type": i.issue_type, "severity": i.severity,
+             "doc_title": i.doc_title, "detail": i.detail}
+            for i in hr.issues if i.severity in ("high", "medium")
+        ][:10]
+        return {
+            "kb_id": kb.id,
+            "kb_name": kb.name,
+            "health_score": hr.score,
+            "health_issues": len(hr.issues),
+            "open_gaps": len(gaps),
+            "pending_tasks": pending,
+            "quality_score": score,
+            "suggestions": hr.suggestions,
+            "top_issues": top_issues,
         }
 
     # ==================== 运营报告 ====================

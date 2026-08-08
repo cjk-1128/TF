@@ -5,12 +5,16 @@
   - observe(name, value, labels=None)            直方图观测（固定 bucket）
   - set_gauge(name, value)                       瞬时量（无标签）
   - render_prometheus() -> str                   渲染 Prometheus 文本
+  - snapshot() -> dict                           结构化聚合（供 admin 性能报告）
+  - request_error_count() -> int                 统计 status>=500 请求数
 
 所有操作线程安全，失败对调用方透明（调用方已 try/except 包裹）。
 命名为 prom_metrics 以避开 app.core.metrics（检索评测指标模块）。
 """
 from __future__ import annotations
 
+import re
+import math
 import threading
 from typing import Dict, List, Optional, Tuple
 
@@ -114,4 +118,72 @@ def _fmt_num(v: float) -> str:
     return ("%.6f" % v).rstrip("0").rstrip(".")
 
 
-__all__ = ["inc_counter", "observe", "set_gauge", "render_prometheus"]
+def _finite(v: Optional[float]) -> Optional[float]:
+    """非有限浮点（NaN/inf/None）统一归零，确保 JSON 可序列化。"""
+    if v is None or not isinstance(v, (int, float)) or not math.isfinite(v):
+        return 0.0
+    return v
+
+
+def _quantile(bucket_cum: List[int], total: int, q: float) -> Optional[float]:
+    """在累积桶计数上估算分位数（Prometheus 线性插值法）。"""
+    if total <= 0:
+        return None
+    target = q * total
+    prev_upper = 0.0
+    prev_cum = 0
+    for i, upper in enumerate(_BUCKETS):
+        cum = bucket_cum[i]
+        if cum >= target:
+            if math.isinf(upper):
+                # 末桶(+inf)无有限上界，用前一个有限桶上限作为估计（避免 inf）
+                return float(prev_upper)
+            if cum == prev_cum:
+                return float(upper)
+            frac = (target - prev_cum) / (cum - prev_cum)
+            est = prev_upper + frac * (float(upper) - prev_upper)
+            return est if math.isfinite(est) else float(prev_upper)
+        prev_upper = float(upper)
+        prev_cum = cum
+    return float(prev_upper)
+
+
+def snapshot() -> dict:
+    """结构化聚合当前所有指标，供 admin 性能报告使用（进程内实时快照，重启归零）。"""
+    with _lock:
+        counters = {name: sum(_counters[name].values()) for name in _counters}
+        gauges = dict(_gauges)
+        histograms: Dict[str, dict] = {}
+        for name, labelmap in _histograms.items():
+            total_count = 0
+            total_sum = 0.0
+            bucket_cum = [0] * len(_BUCKETS)
+            for h in labelmap.values():
+                total_count += int(h["count"])  # type: ignore[typeddict-item]
+                total_sum += float(h["sum"])  # type: ignore[typeddict-item]
+                for i in range(len(_BUCKETS)):
+                    bucket_cum[i] += int(h["buckets"][i])  # type: ignore[index]
+            histograms[name] = {
+                "count": total_count,
+                "sum": total_sum,
+                "avg": _finite((total_sum / total_count) if total_count else 0.0),
+                "p50": _finite(_quantile(bucket_cum, total_count, 0.5)),
+                "p95": _finite(_quantile(bucket_cum, total_count, 0.95)),
+                "p99": _finite(_quantile(bucket_cum, total_count, 0.99)),
+            }
+    return {"counters": counters, "gauges": gauges, "histograms": histograms}
+
+
+def request_error_count() -> int:
+    """统计 status>=500 的请求数（从 terraforge_requests_total 的 label 解析）。"""
+    total = 0
+    with _lock:
+        for key, val in _counters.get("terraforge_requests_total", {}).items():
+            m = re.search(r'status="(\d+)"', key)
+            if m and int(m.group(1)) >= 500:
+                total += int(val)
+    return total
+
+
+__all__ = ["inc_counter", "observe", "set_gauge", "render_prometheus",
+           "snapshot", "request_error_count"]

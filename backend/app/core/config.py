@@ -40,6 +40,12 @@ class Settings(BaseSettings):
     # 日志格式：text（默认，管道分隔）或 json（结构化，便于采集）
     LOG_FORMAT: str = "text"
 
+    # ---------------- 治理门禁阈值（Phase 5 门禁报告）----------------
+    # 入库/发布前质量门禁：向量完整率（已分配 vector_id 切片占比）下限
+    GATE_VECTOR_COMPLETENESS_MIN: float = 0.99
+    # 质量巡检综合分下限
+    GATE_QUALITY_SCORE_MIN: float = 80.0
+
     # ---------------- 数据库 ----------------
     # 生产: mysql+pymysql://user:pwd@host:3306/terraforge?charset=utf8mb4
     # 开发: sqlite:///./terraforge.db  （零依赖启动）

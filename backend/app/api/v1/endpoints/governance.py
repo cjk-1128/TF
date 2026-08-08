@@ -14,6 +14,7 @@ from app.schemas.governance import (GovernanceDashboard, GovernanceTaskCreate,
                                     GovernanceTaskOut, GovernanceTaskUpdate,
                                     KBHealthReport, KnowledgeGap, KnowledgeGapAccept,
                                     KnowledgeGapOut, OperationReport)
+from app.schemas.admin_report import GovernanceDashboardKB
 from app.services.governance_service import GovernanceService
 
 # Sprint4 RBAC：治理接口全部要求有效 API Key
@@ -59,6 +60,14 @@ def reject_gap(gap_id: str, db: Session = Depends(get_db)):
 def dashboard(days: int = Query(30, ge=1, le=365), db: Session = Depends(get_db)):
     return ApiResponse.ok(GovernanceDashboard(**GovernanceService(db).governance_dashboard(days)),
                           trace_id=get_trace_id())
+
+
+@router.get("/dashboard/kb/{kb_id}", response_model=ApiResponse[GovernanceDashboardKB],
+            summary="治理看板按知识库下钻（健康/缺口/任务/质量分）")
+def dashboard_kb(kb_id: str, db: Session = Depends(get_db)):
+    return ApiResponse.ok(
+        GovernanceDashboardKB(**GovernanceService(db).dashboard_kb(kb_id)),
+        trace_id=get_trace_id())
 
 
 @router.post("/tasks", response_model=ApiResponse[GovernanceTaskOut], summary="创建治理事项")
