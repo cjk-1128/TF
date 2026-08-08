@@ -37,6 +37,11 @@ services:
       UPLOAD_DIR: /app/data/uploads
       # Phase 4 可观测性：结构化 JSON 日志（便于采集）；本地开发改回 text
       LOG_FORMAT: json
+      # Phase 6 部署形态：单操作员 + 纯局域网 + 自签证书，前端无登录流程；
+      # 当前前端除 eval/quality 外均不携带 X-API-Key，RBAC 开启会使 kb/doc/rag/gov 全 401。
+      # 关闭后后端以虚拟 admin 放行（config 注释的"仅演示用"模式），SPA 全功能可用。
+      # 若需严格鉴权，应先在前端加全局 X-API-Key 注入（需重建前端 dist，当前受 npm 工具链限制）。
+      RBAC_ENABLED: "false"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     # Phase 6：不再直连宿主端口，仅由同 compose 网络内的 nginx 通过 web:8001 访问
